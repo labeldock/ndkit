@@ -3,7 +3,11 @@
  * Copyright HOJUNG-AHN. and other contributors
  * Released under the MIT license
  */
-nd && (function(N){
+
+nd && nd.PLUGIN(function(N,CORE){
+	
+	N.VERSION += ", webkit(0.0 alpah pre)", N.BUILD += ", webkit(1)";
+	
 	// addEventListener polyfill by https://gist.github.com/jonathantneal/3748027
 	!window.addEventListener && (function (WindowPrototype, DocumentPrototype, ElementPrototype, addEventListener, removeEventListener, dispatchEvent, registry) {
 		WindowPrototype[addEventListener] = DocumentPrototype[addEventListener] = ElementPrototype[addEventListener] = function (type, listener) {
@@ -64,7 +68,7 @@ nd && (function(N){
 		info : function(url){
 			var info;
 			
-			N.TRY_CATCH(
+			CORE.TRY_CATCH(
 				function(){
 					info = /([\w]+)(\:[\/]+)([^/]*\@|)([\w\d\.\-\_\+]+)(\:[\d]+|)(\/|)([\w\d\.\/\-\_]+|)(\?[\d\w\=\&\%]+|)(\#[\d\w]*|)/.exec(url?url:window.document.URL.toString());
 				},
@@ -207,11 +211,103 @@ nd && (function(N){
 		return info;
 	}());
 	
+	var QUERY_SELECTOR_NAME = N.ENV.querySelectorAllName;
+	N.QUERY_SELECTOR_ENGINE = N.ENV.supportQuerySelectorAll && N.ENV.supportNodeListSlice ? 
+	function(node,selector){
+		try {
+			return Array.prototype.slice.call(
+				(node||document)[QUERY_SELECTOR_NAME](
+					selector.replace(/\[[\w\-\_]+\=[^\'\"][^\]]+\]/g, function(s){ 
+						return s.replace(/\=.+\]$/,function(s){ 
+							return '=\"' + s.substr(1,s.length-2) + '\"]'; 
+						}) 
+					})
+				)
+			);
+		} catch(e) {
+			console.error("Nody::QUERY_SELECTOR_ENGINE error",node,selector);
+			if(N.DEBUGER === true)debugger;
+		}
+	
+	}:
+	function(node,selector){
+		try {
+			var nodeList = (node||document)[QUERY_SELECTOR_NAME](
+				selector.replace(/\[[\w\-\_]+\=[^\'\"][^\]]+\]/g, function(s){ 
+					return s.replace(/\=.+\]$/,function(s){ 
+						return '=\"' + s.substr(1,s.length-2) + '\"]'; 
+					}) 
+				})
+			);
+		} catch(e) {
+			console.error("Nody::QUERY_SELECTOR_ENGINE error",node,selector);
+			if(N.DEBUGER === true)debugger;
+		}
+		var result = [];
+		for(var i=0,l=nodeList.length;i<l;i++){
+			nodeList[i] && result.push(nodeList[i]);
+		} 
+		return result;
+	};
+	//if natvie query selector in browser then alternative engine include
+	if(!N.QUERY_SELECTOR_ENGINE){
+		if(typeof Sizzle === "function"){
+			console.info("nody is sizzle selector engine detected");
+			N.QUERY_SELECTOR_ENGINE = function(node,selector){
+				return Sizzle(selector,node);
+			}
+			N.QUERY_SELECTOR_ENGINE_ID = "sizzle";
+		} else if(typeof jQuery === "function") {
+			console.info("nody is jquery selector engine detected");
+			N.QUERY_SELECTOR_ENGINE = function(node,selector){
+				return jQuery(selector,node).toArray();
+			}
+			N.QUERY_SELECTOR_ENGINE_ID = "jquery";
+		}
+	} else {
+		N.QUERY_SELECTOR_ENGINE_ID = "browser";
+	}
+	if(!N.QUERY_SELECTOR_ENGINE){
+		N.QUERY_SELECTOR_ENGINE_ID = null;
+		throw new Error("Nody::ENV::IMPORTANT!! - querySelectorEngine is not detected");
+	}
+	var MATCHES_SELECTOR_NAME = N.ENV.matchesSelectorName;
+	N.MATCHES_SELECTOR_ENGINE = N.ENV.supportMatches && function(node,selector){ 
+		//selectText fix
+		return node[MATCHES_SELECTOR_NAME](
+			selector.replace(/\[[\w\-\_]+\=[^\'\"][^\]]+\]/g, function(s){ 
+				return s.replace(/\=.+\]$/,function(s){ 
+					return '=\"' + s.substr(1,s.length-2) + '\"]'; 
+				}) 
+			})
+		); 
+	}; 
+	//if natvie matches selector in browser then alternative engine include
+	if(!N.MATCHES_SELECTOR_ENGINE){
+		if(typeof Sizzle === "function"){
+			N.MATCHES_SELECTOR_ENGINE = function(node,selector){
+				return Sizzle.matchesSelector(node,selector);
+			}
+			N.MATCHES_SELECTOR_ENGINE_ID = "sizzle";
+		} else if(typeof jQuery === "function") {
+			N.MATCHES_SELECTOR_ENGINE = function(node,selector){
+				return jQuery(node).is(selector);
+			}
+			N.MATCHES_SELECTOR_ENGINE_ID = "jquery";
+		}
+	} else {
+		N.MATCHES_SELECTOR_ENGINE_ID = "browser";
+	}
+	if(!N.MATCHES_SELECTOR_ENGINE){
+		N.MATCHES_SELECTOR_ENGINE_ID = null;
+		throw new Error("Nody::ENV::IMPORTANT!! - matchesSelectorEngine is not detected");
+	}
+	
 	
 	//
 	// webkit : store
 	//
-	if(W.nodyLoadException==true){ throw new Error("Nody Process Foundation init cancled"); return;}
+	if(window.nodyLoadException==true){ throw new Error("Nody Process Foundation init cancled"); return;}
 	
 	//expireTime default 16h
 	var STORE_DEFAULT_EXPIRE_TIME = 57600000;
@@ -567,7 +663,7 @@ nd && (function(N){
 			while ( parseDepth-- ) parseWrapper = parseWrapper.lastChild;
 		
 			N.cache.set("N.parseHTML",html,N.cloneNodes(parseWrapper.children));
-			return N.cloneArray(parseWrapper.children);
+			return N.toArray(parseWrapper.children);
 		},
 		//테그의 속성을 text로 표현합니다.
 		"selectorInfo"   : function(tagProperty,attrValue){ 
@@ -677,7 +773,7 @@ nd && (function(N){
 			return result;
 		},
 		"pushCSSExpression":function(node,expression){
-			if(N.isNode(node)){
+			if(N.isElement(node)){
 				var attrs = (typeof expression === "string") ? N.selectorInfo(expression) :
 							(typeof expression === "object") ? expression :
 							undefined;
@@ -697,10 +793,10 @@ nd && (function(N){
 			return node;
 		},
 		//css스타일 태그를 html스타일 태그로 바꿉니다.
-		"parseTag" : N.PIPE_FUNCTION(function(tagProperty,attrValue){
+		"parseTag" : CORE.PIPE(function(tagProperty,attrValue){
 			if(typeof tagProperty === "object"){
 				var tagText = [];
-				N.each(tagProperty,function(tag){ if(N.isNode(tag)) tagText.push(tag.outerHTML); });
+				N.each(tagProperty,function(tag){ if(N.isElement(tag)) tagText.push(tag.outerHTML); });
 				return tagText.join('');
 			}
 			//TAG중첩을 지원하기 위한 것
@@ -764,7 +860,7 @@ nd && (function(N){
 	N.ELUT.EACH_TO_METHOD();
 	N.SINGLETON("NODEKIT",{
 		"attr":function(node,v1,v2){
-			if(!N.isNode(node)) { console.error("N.NODEKIT.attr은 element만 가능합니다. => 들어온값" + N.tos(node)); return null; }
+			if(!N.isElement(node)) { console.error("N.NODEKIT.attr은 element만 가능합니다. => 들어온값" + N.tos(node)); return null; }
 			if(arguments.length === 1) {
 				return N.inject(node.attributes,function(inj,attr){
 					inj[attr.name] = node.getAttribute(attr.name);
@@ -817,12 +913,12 @@ nd && (function(N){
 			return node;
 		},
 		"root":function(node){
-			if(!N.isNode(node)) return;
+			if(!N.isElement(node)) return;
 			var findWhile = function(node){ node.parentElement ? findWhile(node.parentElement) : node ; };
 			return findWhile(node);
 		},
 		"parents":function(node){
-			if(!N.isNode(node)) return;
+			if(!N.isElement(node)) return;
 			var finded = [];
 			var findWhile = function(node){
 				if(node.parentElement){
@@ -839,7 +935,7 @@ nd && (function(N){
 		},
 		//다수의 CSS테스트
 		"is":function(node,selectText){
-			if(!N.isNode(node)) return false;
+			if(!N.isElement(node)) return false;
 			if((typeof selectText === "undefined") || selectText == "*" || selectText == "") return true;
 			return N.MATCHES_SELECTOR_ENGINE(node,selectText);
 		},
@@ -847,7 +943,7 @@ nd && (function(N){
 		"query":function(query,root){
 			//querySelectorSupport
 			if(typeof query !== "string" || (query.trim().length == 0)) return [];
-			root = ((typeof root === "undefined")?document:N.isNode(root)?root:document);
+			root = ((typeof root === "undefined")?document:N.isElement(root)?root:document);
 			if(root == document) {
 				return N.QUERY_SELECTOR_ENGINE(root,query);
 			} else {
@@ -916,7 +1012,7 @@ nd && (function(N){
 			if( typeof find === 'string' ){
 				// [string,null]
 				return N.NODEKIT.query(find);
-			} else if(N.isNode(find)){
+			} else if(N.isElement(find)){
 				// [node]
 				return [find];
 			}  else if(N.isArray(find)) {
@@ -927,7 +1023,7 @@ nd && (function(N){
 						// [array][string]
 						var fs = N.NODEKIT.query(find[i]);
 						if(fs.length) fc = fc.concat( fs );
-					} else if(N.isNode(find[i])) {
+					} else if(N.isElement(find[i])) {
 						// [array][node]
 						fc.push(find[i]);
 					} else if(N.isArray(find[i])){
@@ -942,7 +1038,7 @@ nd && (function(N){
 		//여러개의 셀럭터와 하나의 루트노드만 허용
 		"findByOnePlace":function(findse,rootNode){
 			if(typeof findse === 'string') return N.NODEKIT.query(findse,rootNode);
-			if( N.isNode(findse) ) {
+			if( N.isElement(findse) ) {
 				var fs = N.NODEKIT.query(N.node.trace(findse),rootNode);
 				for(var i=0,l=fs.length;i<l;i++) if(findse === fs[i]) return [findse];
 			}
@@ -958,7 +1054,7 @@ nd && (function(N){
 		},
 		//다수의 로트와 샐렉터를 받고 출력
 		"findBySeveralPlaces":function(find,root){
-			if(arguments.length === 1 || typeof root === 'undefined' || root === null || root === W.document ) return N.findLite(find);
+			if(arguments.length === 1 || typeof root === 'undefined' || root === null || root === window.document ) return N.findLite(find);
 			// find root
 			var targetRoots = N.findLite(root);
 			if(targetRoots.length === 0) {
@@ -976,27 +1072,41 @@ nd && (function(N){
 			return N.dataUnique(result);
 		},
 		//최적화 분기하여 샐랙터를 실행시킴
-		"find" : N.PIPE_FUNCTION(function(find,root,eq){
+		"find" : CORE.PIPE(function(find,root,eq){
 			return (typeof root === "number") ? N.findLite(find)[root] :
 				   (typeof eq === "number")   ? N.findBySeveralPlaces(find,root)[eq] :
 				   N.findBySeveralPlaces(find,root);
 		}),
-		"findMember":N.PIPE_FUNCTION(function(sel,offset){
+		"findMember":CORE.PIPE(function(sel,offset){
 			var target = N.findLite(sel)[0];
-			if(!N.isNode(target)) return;
+			if(!N.isElement(target)) return;
 			if(typeof offset !== "number") return N.toArray(target.parentElement.children);
 			var currentIndex = -1;
 			N.each(target.parentNode.children,function(node,i){ if(target == node) { currentIndex = i; return false; } });
 			return target.parentNode.children[currentIndex+offset];
 		},1),
+		"findNodes":CORE.PIPE(function(nodes){
+			return nd.filter.BOOST(nodes,function(node){
+				return CORE.TYPEOF.NODE(node);
+			});
+		},1),
+		"attributes":CORE.PIPE(function(node){
+			var r={};
+			for(var key in node.attributes){
+				if(node.attributes.hasOwnProperty(key) && typeof node.attributes[key] == "object"){
+					r[node.attributes[key].name] = node.attributes[key].value;
+				}
+			} 
+			return r;
+		},1),
 		// 하위루트의 모든 노드를 검색함 (Continutiltiy에서 중요함)
-		"findIn" : N.PIPE_FUNCTION(function(root,find,index){
+		"findIn" : CORE.PIPE(function(root,find,index){
 			return (typeof index === 'number') ? N.findBySeveralPlaces(find || '*',N.map(N.findBySeveralPlaces(root),function(node){ return node.children },N.argumentsFlatten))[index] :
 				   (typeof find  === 'number') ? N.findBySeveralPlaces('*',N.map(N.findBySeveralPlaces(root),function(node){ return node.children },N.argumentsFlatten))[find]   :
 												 N.findBySeveralPlaces(find || '*',N.map(N.findBySeveralPlaces(root),function(node){ return node.children },N.argumentsFlatten)) ;
 		},2),
 		// 자식루트의 노드를 검색함
-		"findOn": N.PIPE_FUNCTION(function(root,find){
+		"findOn": CORE.PIPE(function(root,find){
 			var finds = N.map(N.findBySeveralPlaces(root),function(node){ return node.children; },N.argumentsFlatten);
 			switch(typeof find){
 				case "number": return [finds[find]]; break;
@@ -1004,7 +1114,7 @@ nd && (function(N){
 				default      : return finds; break;
 			}
 		},1),
-		"findParents":N.PIPE_FUNCTION(function(el,require,index){ 
+		"findParents":CORE.PIPE(function(el,require,index){ 
 			if(typeof require === 'string') {
 				return (typeof index === 'number') ?
 				N.filter(N.NODEKIT.parents(N.findBySeveralPlaces(el)[0]),function(el){ return N.node.is(el,require); })[index]:
@@ -1015,10 +1125,10 @@ nd && (function(N){
 				return N.NODEKIT.parents(N.findBySeveralPlaces(el)[0]);
 			}
 		},1),
-		"findRoot":N.PIPE_FUNCTION(function(el){ 
+		"findRoot":CORE.PIPE(function(el){ 
 			return N.NODEKIT.root(N.findLite(el)[0]);
 		},1),
-		"findBefore":N.PIPE_FUNCTION(function(node,filter){ 
+		"findBefore":CORE.PIPE(function(node,filter){ 
 			node = N.findLite(node)[0];
 			var index = N.node.index(node); 
 			var result = []; 
@@ -1040,7 +1150,7 @@ nd && (function(N){
 			}
 			return result; 
 		},1),
-		"findAfter":N.PIPE_FUNCTION(function(node,filter){ 
+		"findAfter":CORE.PIPE(function(node,filter){ 
 			node = N.findLite(node)[0];
 			var index = N.node.index(node); 
 			var result = []; 
@@ -1062,7 +1172,7 @@ nd && (function(N){
 			}
 			return result; 
 		},1),
-		"findParent" :N.PIPE_FUNCTION(function(el,require,index){
+		"findParent" :CORE.PIPE(function(el,require,index){
 			if( (typeof require === 'number') || ((typeof require === 'string') && (typeof index === 'number')) ) return N.first(N.findParents(el,require,index));
 			var node = N.findLite(el)[0];
 			if(node) {
@@ -1075,7 +1185,7 @@ nd && (function(N){
 			}
 			return undefined;
 		},1),
-		"findDocument":N.PIPE_FUNCTION(function(iframeNode){
+		"findDocument":CORE.PIPE(function(iframeNode){
 			var iframe = N.findLite(iframeNode)[0];
 			if(iframe) {
 				if(iframe.tagName == "IFRAME") return iframe.contentDocument || iframe.contentWindow.document;
@@ -1085,7 +1195,7 @@ nd && (function(N){
 			}
 		},1),
 		//
-		"findTree":N.PIPE_FUNCTION(function(node,stringify){
+		"findTree":CORE.PIPE(function(node,stringify){
 			var treeNode = N.findLite(node)[0];
 			if(!treeNode) return [];
 			var tree = N.findParents(treeNode,N.map,function(){ return (stringify === true ? N.node.trace(this) : this ); });
@@ -1093,12 +1203,12 @@ nd && (function(N){
 			tree.push( (stringify === true ? N.node.trace(treeNode) : treeNode ) );
 			return tree;
 		},1),
-		"inside":N.PIPE_FUNCTION(function(placeNode,target){
+		"inside":CORE.PIPE(function(placeNode,target){
 			var inside = N.findLite(placeNode);
 			if(!inside.length) return false; 
 			return N.find(target,placeNode).length ? true : false;
 		},1),
-		"outside":N.PIPE_FUNCTION(function(placeNode,target){
+		"outside":CORE.PIPE(function(placeNode,target){
 			var insideNode = N.findLite(target);
 			return insideNode.length ? (N.find(placeNode,insideNode).length ? false : true) : true;
 		},1),
@@ -1213,19 +1323,19 @@ nd && (function(N){
 			//부모에게 어팬딩함
 			parent = N.findLite(parent)[0];
 			if(parent){
-				if(parent==W.document) parent = W.document.getElementsByTagName("body")[0];
+				if(parent==window.document) parent = window.document.getElementsByTagName("body")[0];
 				parent.appendChild(element);
 			}
 			return element;	
 		},
 		//get text node element
-		"makeText":N.PIPE_FUNCTION(function(t){ return W.document.createTextNode(t); },1),
-		"make":N.PIPE_FUNCTION(function(name,attr,third){
-			if ( N.isArray(attr) || N.isNode(attr) || N.isTextNode(attr) ) {
+		"makeText":CORE.PIPE(function(t){ return window.document.createTextNode(t); },1),
+		"make":CORE.PIPE(function(name,attr,third){
+			if ( N.isArray(attr) || N.isElement(attr) || N.isTextNode(attr) ) {
 				var createNode = N.create(name);
 				N.node.append(createNode,new N.Array(arguments).setSubarr(1).setFlatten().toArray());
 				return createNode;
-			} else if(N.isNode(third) || N.isTextNode(third)){
+			} else if(N.isElement(third) || N.isTextNode(third)){
 				var createNode = N.create(name, attr);
 				N.node.append(createNode,new N.Array(arguments).setSubarr(2).setFlatten().toArray());
 				return createNode;
@@ -1233,7 +1343,7 @@ nd && (function(N){
 				return N.create(name, attr);
 			}	
 		},1),
-		"makes":N.PIPE_FUNCTION(function(fulltag,root){
+		"makes":CORE.PIPE(function(fulltag,root){
 			if(typeof fulltag !== "string" || !fulltag) return [];
 			
 			var makeRoot    = N.make('div');
@@ -1321,7 +1431,7 @@ nd && (function(N){
 			
 			return makes;
 		},1),
-		"makeWrap":N.PIPE_FUNCTION(function(wrapper,target,targetParent){
+		"makeWrap":CORE.PIPE(function(wrapper,target,targetParent){
 			var wrapNode     = N.make(wrapper);
 			var targetNodes  = N.find(target,targetParent);
 			if(targetNodes[0] && targetNodes[0].parentElement) {
@@ -1347,7 +1457,7 @@ nd && (function(N){
 				var param = {src:src};
 				if(width) param.style =  'width:'+ N.toPx(width)+';'
 				return N.make('img',param);
-			} else if (N.isNode(src)){
+			} else if (N.isElement(src)){
 				if(src.files && src.files[0]){
 					if (!src.files[0].type.match(/image.*/)) return;
 					var result = N.make('img');
@@ -1371,7 +1481,7 @@ nd && (function(N){
 				img.src = src;
 			}
 		
-			if( N.isNode(render) ) {
+			if( N.isElement(render) ) {
 				if(render.tagName === "IMG") {
 					render = render.src;
 				} else if(render.files) {
@@ -1423,6 +1533,19 @@ nd && (function(N){
 			return N.findLite(result);
 		},
 		"makeSampleNode":function(node,rootExp){
+			var node = nd.find(node,0);
+			if(node) {
+				var roleName = N.first(Object.keys(N.attributes(node)),function(keyname){
+					console.log("keyname",keyname);
+					return /^\:w/.test(keyname);
+				});
+				console.log("RoleName",roleName);
+			}
+			
+			
+			
+			
+			
 			var result, importSample = N.importNodes(node);
 			if(importSample.length === 1){
 				result = importSample[0];
@@ -1532,7 +1655,7 @@ nd && (function(N){
 					//get
 					if(nodeName == "option"){
 						var selNode = N.NODEKIT.query(":selected",node);
-						if( N.isNode(selNode) ) return selNode.value;
+						if( N.isElement(selNode) ) return selNode.value;
 						return node.value;
 					} else {
 						if(typeof value === "undefined") return node.value;
@@ -1635,7 +1758,7 @@ nd && (function(N){
 		},
 		"append":function(parentIn,childs,needIndex){
 			var parent = N.findLite(parentIn)[0];
-			if(!N.isNode(parent)) return parentIn;
+			if(!N.isElement(parent)) return parentIn;
 			
 			var appendTarget  = (/^</.test(childs) && />$/.test(childs)) ? N.parseHTML(childs) : N.findLite(childs);
 			var parentTagName = parent.tagName.toLowerCase();
@@ -1643,7 +1766,7 @@ nd && (function(N){
 			var targetIndex   = typeof needIndex === "number" ? needIndex < 0 ? 0 : needIndex : needIndex;
 			
 			for(var i=0,l=appendTarget.length;i<l;i++)
-				if (N.isNode(appendTarget[i])) {
+				if (N.isElement(appendTarget[i])) {
 					switch(parentTagName){
 					case "table":
 						var tagName = appendTarget[i].tagName.toLowerCase();
@@ -1746,7 +1869,7 @@ nd && (function(N){
 				N.pushCSSExpression(node,exp);
 			});
 		},
-		"insertAfter":N.PIPE_FUNCTION(function(node,appendNodes){ 
+		"insertAfter":CORE.PIPE(function(node,appendNodes){ 
 			var target = N.findLite(node)[0];
 			if(!target) return;
 			if(!target.parentElement) return;
@@ -1755,7 +1878,7 @@ nd && (function(N){
 			var targetIndex = ELKIT.index(target);
 			ELKIT.append(target.parentElement,appendTargets,targetIndex+1);
 		},2),
-		"insertBefore":N.PIPE_FUNCTION(function(node,appendNodes){ 
+		"insertBefore":CORE.PIPE(function(node,appendNodes){ 
 			var target = N.findLite(node)[0];
 			if(!target) return;
 			if(!target.parentElement) return;
@@ -1765,23 +1888,23 @@ nd && (function(N){
 			ELKIT.append(target.parentElement,appendTargets,targetIndex-1);
 		},2),
 		//이후 엘리먼트를 찾습니다.
-		"after" :N.PIPE_FUNCTION(function(target,appendNodes){ 
+		"after" :CORE.PIPE(function(target,appendNodes){ 
 			target = N.findLite(target)[0];
-			if(!N.isNode(target))    return target; 
+			if(!N.isElement(target))    return target; 
 			if(arguments.length < 2) return N.findMember(target,1);
 			ELKIT.insertAfter(target,appendNodes);
 			return target;
 		},1),
 		//이전 엘리먼트를 찾습니다.
-		"before":N.PIPE_FUNCTION(function(node,appendNodes){ 
+		"before":CORE.PIPE(function(node,appendNodes){ 
 			var target = N.findLite(node)[0];
-			if(!N.isNode(target)) return node;
+			if(!N.isElement(target)) return node;
 			if(arguments.length < 2) return N.findMember(target,-1);
 			ELKIT.insertBefore(target,appendNodes);
 			return target; 
 		},1),
 		//대상과 대상의 엘리먼트를 바꿔치기함
-		"change":N.PIPE_FUNCTION(function(left,right){
+		"change":CORE.PIPE(function(left,right){
 			left  = N.findLite(left)[0];
 			right = N.findLite(right)[0];
 			if(left && right ){
@@ -1819,9 +1942,9 @@ nd && (function(N){
 			return replaceTarget;
 		},
 		//같은 위치상의 엘리먼트를 위로 올립니다.
-		"up"   : function(target){if(!N.isNode(target))return target;var parent=target.parentNode;if(!N.isNode(parent))return target;var prev=target.previousSibling;if(!N.isNode(prev))return target;N.node.before(prev,target);},
+		"up"   : function(target){if(!N.isElement(target))return target;var parent=target.parentNode;if(!N.isElement(parent))return target;var prev=target.previousSibling;if(!N.isElement(prev))return target;N.node.before(prev,target);},
 		//같은 위치상의 엘리먼트를 아랠로 내립니다.
-		"down" : function(target){if(!N.isNode(target))return target;var parent=target.parentNode;if(!N.isNode(parent))return target;var next=target.nextSibling;if(!N.isNode(next))return target;N.node.after(next,target);},
+		"down" : function(target){if(!N.isElement(target))return target;var parent=target.parentNode;if(!N.isElement(parent))return target;var next=target.nextSibling;if(!N.isElement(next))return target;N.node.after(next,target);},
 		//스타일을 얻어냅니다.
 		"style": function(targets,styleName,value){
 			//get
@@ -1837,7 +1960,7 @@ nd && (function(N){
 		//내무의 내용을 지웁니다.
 		"empty"  : function(target){ return N.find(target,N.map,function(node){ if("innerHTML" in node) node.innerHTML = ""; return node; }); },
 		//대상 객체를 제거합니다.
-		"remove" : function(node,childs){ var target = N.findLite(node)[0]; if(!N.isNode(target)) return target; if(!N.isNode(target.parentNode)) return target; target.parentNode.removeChild(target); return target; },
+		"remove" : function(node,childs){ var target = N.findLite(node)[0]; if(!N.isElement(target)) return target; if(!N.isElement(target.parentNode)) return target; target.parentNode.removeChild(target); return target; },
 		//케럿의 위치를 찾습니다.
 		"CARET":function(select,pos){
 			//
@@ -1920,7 +2043,7 @@ nd && (function(N){
 			}
 			var e;
 			if ("createEvent" in document) {
-			    e = W.document.createEvent("HTMLEvents");
+			    e = window.document.createEvent("HTMLEvents");
 			    e.initEvent(eventName, true, true);
 			} else {
 				e = {};
@@ -2137,13 +2260,13 @@ nd && (function(N){
 		},
 		"put":function(sel){
 			var node = N.findLite(sel)[0];
-			if(!N.isNode(node)) return console.warn("N.node.put:: node를 찾을수 없습니다. => 들어온값",arguments);
+			if(!N.isElement(node)) return console.warn("N.node.put:: node를 찾을수 없습니다. => 들어온값",arguments);
 			N.node.empty(node);
 			var newContents = [];
 			var params = Array.prototype.slice.call(arguments);
 			params.shift();
 			N.each( N.argumentsFlatten(params) ,function(content){
-				if(N.isNode(content)){
+				if(N.isElement(content)){
 					newContents.push(content);
 				} else if((/^</.test(content) && />$/.test(content))){
 					newContents.push(N.parseHTML(content));
@@ -2393,14 +2516,5 @@ nd && (function(N){
 	});
 	
 	N.METHOD("node",nd.NodeHandler.new);
-	
 	for(var key in ELKIT) N.node[key]=ELKIT[key];
-	
-	N.METHOD("makenode",function(makeParam,makeParam2){
-		return new N.NodeHandler(N.make.apply(undefined,Array.prototype.slice.call(arguments)));
-	});
-	N.METHOD("makesAnd",function(makeParam,makeParam2){
-		return new N.NodeHandler(N.makes.apply(undefined,Array.prototype.slice.call(arguments)));
-	});
-	
-}(nd)) || console.warn("not found nd");
+});

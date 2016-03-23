@@ -1,19 +1,22 @@
 /* 
- * ndkit.js (https://github.com/labeldock/ndkit)
+ * nd.js (https://github.com/labeldock/ndkit)
  * Copyright HOJUNG-AHN. and other contributors
  * Released under the MIT license
  */
 (function(){
-	var N=(function(){return N.API.apply(window,Array.prototype.slice.call(arguments))});
 	
-	(function(W,NMethods,NSingletons,NModules,nody){
+	var CORE={},N=(function(){return N.API.apply(window,Array.prototype.slice.call(arguments))});
+	
+	(function(W,NMethods,NSingletons,NModules,nody,CORE){
 	
 		// Nody version
 		// This is pre release version
-		N.VERSION = "0.0 alpah pre", N.BUILD = "1";
-	
+		N.VERSION = "0.0 alpah pre", N.BUILD = "6";
+		
 		// Core verison
 		N.CORE_VERSION = "3.0", N.CORE_BUILD = "100";
+		
+		N.PLUGIN = function(proc){ proc(N,CORE); };
   
 		// Pollyfill IE Console error fix
 		if (typeof W.console !== "object") W.console = {}; 'log info warn error count assert dir clear profile profileEnd'.replace(/\S+/g,function(n){ if(!(n in W.console)) W.console[n] = function(){ if(typeof air === "object") if("trace" in air){ var args = Array.prototype.slice.call(arguments),traces = []; for(var i=0,l=args.length;i<l;i++){ switch(typeof args[i]){ case "string" : case "number": traces.push(args[i]); break; case "boolean": traces.push(args[i]?"true":"false"); break; default: traces.push(N.toString(args[i])); break; } } air.trace( traces.join(", ") ); } } });	
@@ -25,7 +28,7 @@
 		if(!String.prototype.trim) String.prototype.trim = function() { return this.replace(/(^\s*)|(\s*$)/gi, ""); };
 	 
 		// Pollyfill : JSON
-		if(typeof W.JSON === "undefined"){ W.JSON = { 'parse' : function(s) { var r; try { r = eval('(' + s + ')'); } catch(e) { r = N.toObject(s); } return r; }, 'stringify' : function(o) { return W.N.toString(obj,Number.POSITIVE_INFINITY,true); } };}
+		if(typeof W.JSON === "undefined"){ W.JSON = { 'parse' : function(s) { var r; try { r = eval('(' + s + ')'); } catch(e) { r = N.asObject(s); } return r; }, 'stringify' : function(o) { return W.N.toString(obj,Number.POSITIVE_INFINITY,true); } };}
 		
 		// Pollyfill : bind
 		if (!Function.prototype.bind) { Function.prototype.bind = function (oThis) { if (typeof this !== "function") { throw new TypeError("Function.prototype.bind - what is trying to be bound is not callable"); } var aArgs = Array.prototype.slice.call(arguments, 1), fToBind = this, fNOP = function () {}, fBound = function () { return fToBind.apply(this instanceof fNOP && oThis ? this : oThis, aArgs.concat(Array.prototype.slice.call(arguments))); }; fNOP.prototype = this.prototype; fBound.prototype = new fNOP(); return fBound; }; }
@@ -68,7 +71,7 @@
 			    }
 				if(typeof N[name] === "function") {
 					if (N[name]["__NativeMethod__"]) {
-						return "NODY_PIPE_FUNCTION :: " + name + /\(([^\)]*)\)/.exec(N[name]["__NativeMethod__"])[0];
+						return "NODY_NDPIPE :: " + name + /\(([^\)]*)\)/.exec(N[name]["__NativeMethod__"])[0];
 					} else {
 						return "NODY_METHOD :: " + name + /\(([^\)]*)\)/.exec(N[name])[0];
 					}
@@ -330,30 +333,180 @@
 			N[n]=new o();
 			NSingletons[n]=N[n];
 		};
-		// (pipeline base function call)
-		// var a = N.PIPE_FUNCTION(function(a){ return a; });
-		// var b = function(a,b){ return a+b; };
-		// a(1,b,2); => 3
-		N.PIPE_FUNCTION = function(func,over,owner){
-			var f = function(){
-				if(arguments.length >= f.__NativeMethodOver__){					
-					for(var i=f.__NativeMethodOver__,l=arguments.length;i<l;i++){
-						if(typeof arguments[i] === "function"){
-							return arguments[i].apply(
-								owner,[func.apply(owner,Array.prototype.slice.call(arguments,0,i))].concat(Array.prototype.slice.call(arguments,i+1,l))
-							); 
+		
+		var CORE = {};
+		
+		N.CORE = CORE;
+		
+		CORE.TYPEOF  = {
+			VENDER:function(o){ return (typeof o === "object" && o !== null ) ? ("jquery" in o) ? true : false : false; },
+			LIKEARRAY:function(a){ return (typeof a === "object" && a !== null ) ? (((a instanceof Array || a instanceof NodeList || a instanceof HTMLCollection || CORE.TYPEOF.VENDER(a) || ( !isNaN(a.length) && isNaN(a.nodeType))) && !(a instanceof Window) ) ? true : false) : false; },
+			ARRAY:function(a){ return a instanceof Array; },
+			NODE:function(a){ if(a == null) return false; if(typeof a === "object") if(typeof a.nodeType == "number") return true; return false; },
+			ELEMENT:function(a){ if(a == null) return false; if(typeof a === "object") if(a.nodeType == 1) return true; return false; },
+		};
+		
+		CORE.NEW_ARRAY = function(v) { 
+			if( CORE.TYPEOF.LIKEARRAY(v) ) { 
+				if("toArray" in v){ 
+					return Array.prototype.slice.apply(v.toArray()); 
+				} else {
+					var mvArray = [];
+					for(var i=0,l=v.length;i<l;i++) mvArray.push(v[i]); 
+					return mvArray;
+				} 
+			}
+			
+			if(v||v==0) return [v];
+			return [];
+		}
+		
+		CORE.AS_ARRAY = function(v){
+			return CORE.TYPEOF.ARRAY(v) ? v : CORE.NEW_ARRAY(v);
+		};
+		
+		CORE.AS_OBJECT = function(param,es,kv){
+				if(typeof param==="object"){
+					//null filter
+					return param ? param : {};
+				} 
+				if(kv == true && ( typeof param === "string" || typeof es === "string")){ var r = {}; r[es] = param; return r; }
+				if(typeof param==="string" || typeof param==="boolean") {
+					var c = CORE.TRY_CATCH(function(){
+						//native JSON call
+						if(JSON == aJSON) throw new Error("not json supported browser");
+						var jp = JSON.parse(param);
+						if(typeof jp !== "object") throw new Error("pass");
+					},function(e){
+					
+						if( (new N.StringSource(param)).isDataContent()=="plain" ){
+							var esv = (typeof es === "string" ? es : "value");
+							var reo={};reo[esv]=param;
+							return reo;
 						}
-					} 
+					
+						return (new N.StringSource(param)).getContentObject();
+					});
 				}
-				return f.__NativeMethod__.apply(owner,Array.prototype.slice.call(arguments));
-			};
-			f.__NativeMethod__     = func;
-			f.__NativeMethodOver__ = (over || 1);
+				return c || {};
+		};
+		
+		CORE.RECALL = function(f){
+			if(typeof f === "function") return f.apply(this,Array.prototype.slice.call(arguments,1));
 			return f;
 		};
 		
+		CORE.CLONE = function(target,d){
+			if(d) {
+				if(CORE.TYPEOF.LIKEARRAY(target)) {
+					if(!CORE.TYPEOF.LIKEARRAY(d)) { d = [] };
+					for (var i=0,l=target.length;i<l;i++) d.push( ((typeof target[i] === "object" && target[i] !== null ) ? CORE.CLONE(target[i]) : target[i]) )
+					return d;
+				} else {
+					if(d == true) { d = {} };
+			        for (var p in target) (typeof target[p] === "object" && target[p] !== null && d[p]) ? CORE.CLONE(target[p],d[p]) : d[p] = target[p];
+					return d;
+				}
+			
+			}
+			switch(typeof target){
+				case "undefined": case "function": case "boolean": case "number": case "string": return target; break;
+				case "object":
+					if(target === null) return target;
+					if(target instanceof Date){
+						var r=new Date();r.setTime(target.getTime());return r;
+					}
+					if(CORE.TYPEOF.LIKEARRAY(target)){
+						var r=[]; for(var i=0,length=target.length;i<length;i++)r.push(target[i]); return r;
+					} 
+					if(CORE.TYPEOF.ELEMENT(target) == true){
+						return target;
+					}
+					var r={};
+					for(var k in target){
+						if(target.hasOwnProperty(k))r[k]=target[k];
+					}
+					return r;
+				break;
+				default : console.error("CORE.CLONE::copy failed : target => ",target); return target; break;
+			}
+		};
+		
+		// (pipeline base function call)
+		// var a = CORE.PIPE(function(a){ return a; });
+		// var b = function(a,b){ return a+b; };
+		// a(1,b,2); => 3
+		CORE.PIPE = function(func,over,owner){ 
+			var f = function(){ 
+				if(arguments.length >= f.__NativeMethodOver__){ 
+					for(var i=f.__NativeMethodOver__,l=arguments.length;i<l;i++){ 
+						if(typeof arguments[i] === "function"){ 
+							return arguments[i].apply(owner,[func.apply(owner,Array.prototype.slice.call(arguments,0,i))].concat(Array.prototype.slice.call(arguments,i+1,l)) ); 
+						} 
+					} 
+				} 
+				return f.__NativeMethod__.apply(owner,Array.prototype.slice.call(arguments)); 
+			}; 
+			f.__NativeMethod__=func,
+			f.ACLINK =function(argu){
+				var args = CORE.NEW_ARRAY(argu);
+				if(args[0]) args[0] = CORE.CLONE(args[0]);
+				return f.apply(undefined,args);
+			},
+			f.BOOST=func,
+			f.__NativeMethodOver__=(over || 1); 
+			return f; 
+		};
+
 		//trycatch high perfomance
-		N.TRY_CATCH = function(t,c,s){try{return t.call(s);}catch(e){if(typeof c === 'function') return c.call(s,e);}};
+		CORE.TRY_CATCH = function(t,c,s){try{return t.call(s);}catch(e){if(typeof c === 'function') return c.call(s,e);}};
+		
+		var UNIQUE_RANDOM_KEYS = [];
+		N.SINGLETON("RANDKIT",{
+			//random
+			base64Token  : "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/",
+			base64Random : function(length,codeAt,codeLength){
+				length     = (isNaN(length)) ? 1 : parseInt(length);
+				codeAt     = (isNaN(codeAt)) ? 0 : parseInt(codeAt);
+				codeLength = (isNaN(codeLength)) ? 64 - codeAt : parseInt(codeLength);
+				var result = "";
+				for(var i=0,l=length;i<l;i++) result = result + this.base64Token.charAt( codeAt + parseInt(Math.random() * codeLength) );
+				return result;
+			},
+			base64UniqueRandom:function(length,prefixKey,codeAt,codeLength){
+				var randomKey;
+				var process = 0;
+				prefixKey = (typeof prefixKey === 'string') ? prefixKey : '';
+				do {
+					var needContinue = false;
+					randomKey        = prefixKey + this.base64Random(length,codeAt,codeLength);
+					N.each(UNIQUE_RANDOM_KEYS,function(recentKey){
+						if(recentKey == randomKey) needContinue = true;
+						return false;
+					});
+				
+					process++;
+				
+					if(process > 100) {
+						console.log("base64UniqueRandom 1000회 이상 랜덤을 생성하였지만 unique 값을 구할수 없었습니다");
+						needContinue = false;
+						randomKey    = undefined;
+					}
+				} while(needContinue);
+			
+				if(randomKey) UNIQUE_RANDOM_KEYS.push(randomKey);
+			
+				return randomKey;
+			},
+			base62Random:function(length) { return this.base64Random(length,0,62); },
+			base62UniqueRandom:function(length,prefix) { return this.base64UniqueRandom(length || 6,prefix,0,62); },
+			random:function(length) { return parseInt(this.base64Random(length,52,10)); },
+			numberRandom:function(length) { return this.base64Random(length,52,10); },
+			base36Random:function(length) { return this.base64Random(length,26,36); },
+			base36UniqueRandom:function(length,prefix) { return this.base64UniqueRandom(length || 6,prefix,26,36); },
+			base26Random:function(length) { return this.base64Random(length,0,52); },
+			base26UniqueRandom:function(length,prefix) { return this.base64UniqueRandom(length || 6,prefix,0,52); }
+		});
 		
 		//
 		// ndkit : cache
@@ -371,7 +524,6 @@
 			trace:function()     { return JSON.stringify(nody_cache); }
 		}
 		N.cache.clear();
-		
 		
 		//
 		// ndkit : type
@@ -391,8 +543,8 @@
 			"isNumber"   : function (t) {return typeof t === "number"   ? true : false;},
 			"likeNumber" : function (t) {return (typeof t === "number") ? true : ((typeof t === "string") ? (parseFloat(t)+"") == (t+"") : false );},
 		
-			"isJquery"   : function(o){ return (typeof o === "object" && o !== null ) ? ("jquery" in o) ? true : false : false; },
-			"isArray"    : function(a){ return (typeof a === "object" && a !== null ) ? (((a instanceof Array || a instanceof NodeList || N.isJquery(a) || ( !isNaN(a.length) && isNaN(a.nodeType))) && !(a instanceof Window) ) ? true : false) : false; },
+			"isJquery"   : CORE.TYPEOF.VENDER,
+			"isArray"    : CORE.TYPEOF.LIKEARRAY,
 			"isArguments": function(a){ return (typeof a === "object" && a !== null) ? ("callee" in a) ? true : false : false; },
 			"isEmail"    : function(t){ return N.likeString(t) ? /^[\w]+\@[\w]+\.[\.\w]+/.test(t) : false;},
 			"isAscii"    : function(t){ return N.likeString(t) ? /^[\x00-\x7F]*$/.test(t)         : false;},
@@ -405,8 +557,9 @@
 			// // 엘리먼트 유형 검사
 			"isWindow"  :function(a){ if(typeof a === "object") return "navigator" in a; return false; },
 			"isDocument":function(a){ return typeof a === "object" ? a.nodeType == 9 ? true : false : false; },
-			"isNode"  :function(a){ if(a == null) return false; if(typeof a === "object") if(a.nodeType == 1) return true; return false;},
-			"hasNode" :function(a){ if( N.isArray(a) ){ for(var i=0,l=a.length;i<l;i++) if(N.isNode(a[i])) return true; return false; } else { return N.isNode(a); } },
+			"isElement" : CORE.TYPEOF.ELEMENT,
+			"isNode"    : CORE.TYPEOF.NODE,
+			"hasNode" :function(a){ if( CORE.TYPEOF.LIKEARRAY(a) ){ for(var i=0,l=a.length;i<l;i++) if(CORE.TYPEOF.ELEMENT(a[i])) return true; return false; } else { return CORE.TYPEOF.ELEMENT(a); } },
 			"isTextNode":function(a){ if(a == null) return false; if(typeof a === "object") if(a.nodeType == 3 || a.nodeType == 8) return true; return false;},
 			// // 값 유형 검사
 			// 0, "  ", {}, [] 등등 value가 없는 값을 검사합니다.
@@ -415,9 +568,9 @@
 				if (typeof o === "string")return o.trim().length < 1 ? true : false;
 				if (typeof o === "object"){
 					if(o instanceof RegExp) return false;
-					if(N.isNode(o)) return false;
+					if(CORE.TYPEOF.ELEMENT(o)) return false;
 					if(o == null ) return true;
-					if(N.isArray(o)) {
+					if(CORE.TYPEOF.LIKEARRAY(o)) {
 						o = o.length;
 					} else {
 			            var count = 0; for (var prop in o) { count = 1; break; } o = count;
@@ -525,45 +678,34 @@
 				return N.is(target,test,tb,fb);
 			}
 		});
+		
 		N.TYPE.EACH_TO_METHOD();
 	
-		//퍼포먼스를 위해 바깥쪽에 꺼내놓았음
-		var CLONE_ARRAY_PROC = function(v) { 
-			if( N.isArray(v) ) { 
-				if("toArray" in v){ 
-					return Array.prototype.slice.apply(v.toArray()); 
-				} else {
-					var mvArray = [];
-					for(var i=0,l=v.length;i<l;i++) mvArray.push(v[i]); 
-					return mvArray;
-				} 
+		var DATA_FILTER_PROC = function(inData,filterMethod){
+			var data = CORE.AS_ARRAY(inData);
+			filterMethod = filterMethod || function(a){ return typeof a === "undefined" ? false : true; };
+			if(typeof filterMethod === "function"){
+				var result=[];
+				N.each(data,function(v,i){ if(filterMethod(v,i)==true) result.push(v); });
+				return result;
 			}
-			if(v||v==0) return [v];
 			return [];
-		}
-		//이미 배열인경우에는 그대로 리턴해준다.
-		var TO_ARRAY_PROC = function(t,s){
-			if(typeof t === "object") if(N.isArray(t)) {
-				if( (t instanceof NodeList) ||  (t instanceof HTMLCollection) ) return N.cloneArray(t);
-				return t;
-			} 
-			if(typeof t === "undefined" && arguments.length < 2) return [];
-			if(typeof t === "string" && typeof s === "string") return t.split(s);
-			return [t];
 		};
+		
 		var DATA_ANY_PROC = function(inData,filterMethod){
 			var tr = false,fm=(typeof filterMethod === 'function') ? filterMethod : function(v){ return v === filterMethod; };
 			filterMethod = filterMethod || function(a){ return typeof a === "undefined" ? false : true; };
-			N.filter(inData,function(v,i){
+			DATA_FILTER_PROC(inData,function(v,i){
 				var r = fm(v,i)
 				if(r === true) { tr = true; return false; }
 			});
 			return tr;
 		};
+		
 		var DATA_ALL_PROC = function(inData,filterMethod){
 			var tr = true,fm=(typeof filterMethod === 'function') ? filterMethod : function(v){ return v === filterMethod; };
 			filterMethod = filterMethod || function(a){ return typeof a === "undefined" ? false : true; };
-			N.filter(inData,function(v,i){
+			DATA_FILTER_PROC(inData,function(v,i){
 				var r = fm(v,i);
 				if(r === false) return tr = false;
 			});
@@ -571,38 +713,141 @@
 		};
 		
 		// 배열 오브젝트 베이스 KIT
-		N.SINGLETON("DATAKIT",{
-			"callArray":N.PIPE_FUNCTION(function(d,alt){ return (typeof d === 'undefined') ? N.cloneArray(alt) : ((alt === true) ? N.cloneArray(d) : N.toArray(d)); },1),
-			"asArray":function(v){
-				return N.isArray(v) ? v : N.callArray(v);
+		N.SINGLETON("DATAKIT",{			
+			"asArray":CORE.PIPE(function(v){
+				return CORE.TYPEOF.LIKEARRAY(v) ? v : CORE.NEW_ARRAY(v);
+			},1),
+			"asObject":CORE.PIPE(function(ob,es,kv){
+				return CORE.AS_OBJECT(ob,es,kv);
+			},1),
+			//배열이 아니면 배열로 만들어줌
+			"toArray":CORE.PIPE(function(v){
+				return CORE.NEW_ARRAY(v);
+			},1),
+			"toObject":CORE.PIPE(function(ob,es,kv){
+				return CORE.AS_OBJECT(ob,es,kv);
+			},1),
+			"pushOf":CORE.PIPE(function(d,v,k){
+				if(typeof d == "object"){
+					if(CORE.TYPEOF.LIKEARRAY(d)){
+						d.push(v);
+					} else {
+						d[k || "value"] = v;
+					}
+				}
+				return d;
+			},2),
+			"push":CORE.PIPE(function(d,v,k){
+				return N.pushOf.BOOST(CORE.CLONE(d),v,k);
+			},2),
+			//첫번째 소스에 두번째 부터 시작하는 소스를 반영
+			"extendOf":function(data){
+				if(typeof data !== "object") return data;
+				for(var i=1,l=arguments.length;i<l;i++) 
+					if( typeof arguments[i] == "object" ) 
+						for(var key in arguments[i]) data[key] = arguments[i][key];
+				return data;
 			},
+			"extend":function(data,fillData,forceFill){
+				if(typeof data !== "object") {
+					if(data === undefined) data = {};
+					else data = {data:data};
+				}
+				if(forceFill !== true) forceFill = CORE.AS_ARRAY(forceFill);
+				if (forceFill.length || forceFill === true) {
+					for(var key in fillData)  {
+						if( !(key in data) ) data[key] = fillData[key];
+						else if(forceFill === true || N.has(forceFill,key) ) data[key] = fillData[key];
+					} 
+				} else {
+					for(var key in fillData)  if( !(key in data) ) data[key] = fillData[key];
+				}
+				return data;
+			},
+			//완전히 새로운 포인터 오브젝트에 다른 소스를 반영
+			"margeOf":function(data){
+				if(typeof data !== "object") {
+					if(data === undefined) data = {};
+					else data = {data:data};
+				} 
+				return N.extend.apply(undefined,[CORE.CLONE(data,true)].concat(Array.prototype.slice.call(arguments,1)));
+			},
+			"marge":function(data,fillData,forceFill){
+				return N.extendOf(CORE.CLONE(data,true),fillData,forceFill);
+			},
+			"all":DATA_ALL_PROC,
+			"any":DATA_ANY_PROC,
 			"has" :function(d,v){ 
-				d=N.toArray(d); for(var i=0,l=d.length;i<l;i++) if(d[i] === v) return true; return false; 
+				if(typeof d === "object"){
+					if(CORE.TYPEOF.LIKEARRAY(d)){
+						for(var i=0,l=d.length;i<l;i++) if(d[i] === v) return true; return false; 
+					} else {
+						for(var k in d) if(d[k] === v) return true; return false; 
+					}
+				}
 			},
+			"needOf":CORE.PIPE(function(d,v){
+				!N.has(d,v) && N.pushOf.BOOST(d,v); return d;
+			},2),
+			"need":CORE.PIPE(function(d,v){
+				return N.needOf.BOOST(CORE.CLONE(d),v);
+			},2),
+			"get":CORE.PIPE(function(d,index){
+				if(typeof d === "object" || typeof d === "string") return d[index];
+				return d;
+			},1),
+			"setOf":CORE.PIPE(function(d,v,k){
+				if(typeof k === "undefined") k = (typeof d == "string" || CORE.TYPEOF.LIKEARRAY(v)) ? 0 : "value";
+				if(typeof d === "object" || typeof d === "string") d[k] = CORE.RECALL(v);
+				return d;
+			},2),
+			"set":CORE.PIPE(function(d,v,k){
+				return N.setOf.BOOST(CORE.CLONE(d),v,k);
+			},2),
+			"range":CORE.PIPE(function(end,start,step){
+				var r=[];
+				end=parseFloat(end),end=isNaN(end)?0:end;
+				start=parseFloat(start),start=isNaN(start)?0:start;
+				step=parseFloat(step),step=isNaN(step)||step==0?1:step;
+				console.log(start,end,step);
+				for(var i=start,l=end;i<l;i=i+step){
+					r.push(i);
+				}
+				return r;
+			},1),
 			//배열의 하나추출
-			"first":N.PIPE_FUNCTION(function(t){return typeof t === "object" ? typeof t[0] === "undefined" ? undefined : t[0] : t;},1),
+			"first":CORE.PIPE(function(t,offset){
+				if(typeof offset === "function" && CORE.TYPEOF.LIKEARRAY(t)) for(var i=0,l=t.length;i<l;i++){
+					if(offset(t[i],i)===true){
+						return t[i];
+					} 
+				} 
+				return typeof t === "object" ? typeof t[0] === "undefined" ? undefined : t[0+(~~offset)] : t;
+			},2),
 			//배열의 뒤
-			"last":N.PIPE_FUNCTION(function(t){ return N.isArray(t) ? t[t.length-1] : t; },1),
+			"last":CORE.PIPE(function(t,offset){ 
+				return CORE.TYPEOF.LIKEARRAY(t) ? t[t.length-1-(~~offset)] : t; 
+			},2),
 			// 각각의 값의 function실행
-			"each":N.PIPE_FUNCTION(function(v,f){ 
-				var ev=N.asArray(v);
+			"each":CORE.PIPE(function(v,f){ 
+				var ev=CORE.AS_ARRAY(v);
 				for(var i=0,l=ev.length;i<l;i++) if(f.call(ev[i],ev[i],i) === false) return false;
 				return ev; 
 			},2),
 			// 각각의 값의 function실행
-			"reverseEach":N.PIPE_FUNCTION(function(v,f){ 
-				var ev=N.asArray(v); 
+			"reverseEach":CORE.PIPE(function(v,f){ 
+				var ev=CORE.AS_ARRAY(v); 
 				for(var i=ev.length-1;i>-1;i--) if(f.call(ev[i],ev[i],i) === false) return false; 
 				return ev; 
 			},2),
 			// 각각의 값을 배열로 다시 구해오기
-			"map":N.PIPE_FUNCTION(function(v,f){ 
-				var rv=[],ev=N.asArray(v); 
+			"map":CORE.PIPE(function(v,f){ 
+				var rv=[],ev=CORE.AS_ARRAY(v); 
 				for(var i=0,l=ev.length;i<l;i++) rv.push(f.call(ev[i],ev[i],i)); return rv; 
 			},2),
 			// define이 끝날때까지 계속 map을 생성함
-			"defineMap":N.PIPE_FUNCTION(function(v,f,infinity){ 
-				var v=v,rv=(typeof v === "undefined") ? [] : [v],ev=N.toArray(v),infinity = (typeof infinity === "number") ? infinity : 100000;
+			"defineMap":CORE.PIPE(function(v,f,infinity){ 
+				var v=v,rv=(typeof v === "undefined") ? [] : [v],ev=CORE.AS_ARRAY(v),infinity = (typeof infinity === "number") ? infinity : 100000;
 				for(var i=0;i<infinity;i++){
 					v = f.call(v,v,i);
 					if(typeof v === "undefined") break;
@@ -610,13 +855,8 @@
 				} 
 				return rv;
 			},2),
-			"ownerMap":function(owner,args){
-				return N.map(args,function(arg){
-					return (typeof arg === "function") ? function(){ return arg.apply(owner,Array.prototype.slice.call(arguments)); } : arg;
-				});
-			},
-			"removeByIndex":function(array,indexes){
-				if(N.isArray(array)){
+			"removeByKey":function(array,indexes){
+				if(CORE.TYPEOF.LIKEARRAY(array)){
 					var removeCount = 0;
 					N.each(N.dataUnique(indexes).sort(),function(index){
 						if(typeof index === "number") array.splice(index+(removeCount++),1);
@@ -624,29 +864,19 @@
 				}
 			},
 			"removeByValue":function(array,target){
-				if(N.isArray(array)){
+				if(CORE.TYPEOF.LIKEARRAY(array)){
 					var selectIndex = -1;
 					var removeIndexes = [];
 					for(var i=0,l=array.length;i<l;i++) if(array[i] === target) removeIndexes.push(i);
-					if(removeIndexes.length) N.removeByIndex(array,removeIndexes);
+					if(removeIndexes.length) N.removeByKey(array,removeIndexes);
 				}
 			},
 			"inject":function(v,f,d){ 
-				d=(typeof d=="object"?d:{});v=N.toArray(v); for(var i=0,l=v.length;i<l;i++)f(d,v[i],i);return d;
+				d=(typeof d=="object"?d:{});v=CORE.AS_ARRAY(v); for(var i=0,l=v.length;i<l;i++)f(d,v[i],i);return d;
 			},
-			// false를 호출하면 배열에서 제거합니다.
-			"filter":N.PIPE_FUNCTION(function(inData,filterMethod){
-				var data = N.toArray(inData);
-				filterMethod = filterMethod || function(a){ return typeof a === "undefined" ? false : true; };
-				if(typeof filterMethod === "function"){
-					var result=[];
-					N.each(data,function(v,i){ if(filterMethod(v,i)==true) result.push(v); });
-					return result;
-				}
-				return [];
-			},2),
-			"add":function(data,v){
-				var data = N.toArray(data), included=false;
+			"filter":CORE.PIPE(DATA_FILTER_PROC,2),
+			"add":CORE.PIPE(function(data,v){
+				var data = CORE.AS_ARRAY(data), included=false;
 				for(var i=0,l=data.length;i<l;i++){
 					if(data[i]===v){
 						included = true;
@@ -655,30 +885,60 @@
 				}
 				if(included===false) data.push(v);
 				return data;
-			},
-			"insert":function(data,v,a){
-				data = Array.prototype.slice.call(N.toArray(data));
+			},2),
+			"insert":CORE.PIPE(function(data,v,a){
+				data = CORE.AS_ARRAY(data);
 				Array.prototype.splice.call(data,typeof a === "number"?a:0,0,v);	
 				return data;
-			},
+			},2),
+			// false를 호출하면 배열에서 제거합니다.
+			"sort":CORE.PIPE(function(data,filter){
+				if(data.length == 0) return data.toArray();
+				if(typeof filter !== "function") return Array.prototype.sort.call(new N.Array(data));
+				
+				var result = [data[0]];
+				
+				for(var i=1,l=data.length;i<l;i++) for(var ri=0,rl=result.length;ri<rl;ri++){
+					if(filter(data[i],result[ri]) === true){
+						N.insert(result,data[i],ri);
+						break;
+					}
+					if((ri + 1) === result.length){
+						result.push(data[i]);
+					}
+				}
+				return result;
+			},2),
 			"arrayShift":function(data,len,rep){
 				Array.prototype.splice.apply(data,[0,typeof len==="number"?len:1].concat(Array.prototype.slice.call(arguments,2)));
 				return data;
 			},
-			"dataEnter":N.PIPE_FUNCTION(function(data,index){
+			"enter":CORE.PIPE(function(data,index){
 				if(typeof index !== "number" || index === NaN) return [];
-				var r = [], d = N.toArray(data);
+				var r = [], d = CORE.AS_ARRAY(data);
 				for(var i=0,l=index < d.length ? index : d.length;i<l;i++) r.push(d[i]);
 				return r;
 			},2),
-			"dataExit":N.PIPE_FUNCTION(function(data,index){
+			"exit":CORE.PIPE(function(data,index){
 				if(typeof index !== "number" || index === NaN) return [];
-				var r = [], d = N.toArray(data);
+				var r = [], d = CORE.AS_ARRAY(data);
 				for(var i=index<0?0:index,l=d.length;i<l;i++) r.push(d[i]);
 				return r;
 			},2),
+			"exitFillOf":CORE.PIPE(function(data,index,req){
+				data = CORE.AS_ARRAY(data);
+				if(typeof req == "function"){
+					for(var i=data.length,l=~~index;i<l;i++) data.push(req(i));
+				} else {
+					for(var i=data.length,l=~~index;i<l;i++) data.push(CORE.CLONE(req));
+				}
+				return data;
+			},3),
+			"exitFill":CORE.PIPE(function(data,index,req){
+				return N.exitFillOf.BOOST(CORE.CLONE(data),index,req);
+			},3),
 			"dataShift":function(data,len,rep){
-				return N.arrayShift(Array.prototype.slice.call(N.toArray(data)),len,rep);
+				return N.arrayShift(Array.prototype.slice.call(CORE.AS_ARRAY(data)),len,rep);
 			},
 			"arrayUnshift":function(data,index,rep){
 				//todo:behind와 통합
@@ -687,25 +947,13 @@
 				return data;
 			},
 			"dataUnshift":function(data,index,rep){
-				return N.arrayReplace(Array.prototype.slice.call(N.toArray(data)),index,rep);
-			},
-			"dataAny":DATA_ANY_PROC,
-			"dataAll":DATA_ANY_PROC,
-			"arrayAny":function(arr,filter){
-				if(!N.isArray(arr)) 
-					return undefined;
-				return DATA_ANY_PROC(arr,filter);
-			},
-			"dataAny":function(){
-				if(!N.isArray(arr,filter)) 
-					return undefined;
-				return DATA_ANY_PROC(arr,filter)
+				return N.arrayReplace(Array.prototype.slice.call(CORE.AS_ARRAY(data)),index,rep);
 			},
 			//중복되는 값 제거
 			"dataUnique" :function(){
 				var value  = [],result = [];
 				for(var ai=0,li=arguments.length;ai<li;ai++){
-					var mvArray = N.cloneArray(arguments[ai]);
+					var mvArray = CORE.NEW_ARRAY(arguments[ai]);
 					for(var i=0,l=mvArray.length;i<l;i++){
 						var unique = true;
 						for(var i2=0,l2=result.length;i2<l2;i2++){
@@ -723,8 +971,8 @@
 				var firstType  = typeof data1;
 				if(firstType === typeof data2) {
 					if(firstType === "object") {
-						var firstArray = N.isArray(data1);
-						if(firstArray === N.isArray(data2)){
+						var firstArray = CORE.TYPEOF.LIKEARRAY(data1);
+						if(firstArray === CORE.TYPEOF.LIKEARRAY(data2)){
 							if(firstArray){
 								//둘다 array일 경우
 								if(data1.length === data2.length) {
@@ -740,7 +988,7 @@
 									return false;
 								}
 							} else {
-								var allkeys = N.dataFlatten(N.propKey(data1),N.propKey(data2),N.dataUnique);
+								var allkeys = N.flatten(N.propKey(data1),N.propKey(data2),N.dataUnique);
 								var equal = true;
 								for(var i=0,l=allkeys.length;i<l;i++){
 									if(data1[allkeys[i]] !== data2[allkeys[i]]){
@@ -762,7 +1010,7 @@
 			"dataEqualUnique":function(){
 				var value=[],result=[];
 				for(var ai=0,li=arguments.length;ai<li;ai++){
-					var mvArray = N.cloneArray(arguments[ai]);
+					var mvArray = CORE.NEW_ARRAY(arguments[ai]);
 					for(var i=0,l=mvArray.length;i<l;i++){
 						var unique = true;
 						for(var i2=0,l2=result.length;i2<l2;i2++){
@@ -779,7 +1027,7 @@
 			},
 			//길이만큼 무작위로 뽑아낸다
 			"dataRandom":function(v,length){
-				v = N.cloneArray(v);
+				v = CORE.NEW_ARRAY(v);
 				if(typeof length === "undefined") return v[Math.floor(Math.random() * v.length)];
 				if(length > v.length) length = v.length;
 				var r = [];
@@ -791,28 +1039,24 @@
 				return r;
 			},
 			//데이터를 섞는다
-			"dataShuffle":N.PIPE_FUNCTION(function(v){
-				v = N.cloneArray(v);
+			"dataShuffle":CORE.PIPE(function(v){
+				v = CORE.NEW_ARRAY(v);
 				//+ Jonas Raoni Soares Silva
 				//@ http://jsfromhell.com/array/shuffle [rev. #1]
 			    for(var j, x, i = v.length; i; j = parseInt(Math.random() * i), x = v[--i], v[i] = v[j], v[j] = x);
 			    return v;
 			},1),
-			"dataIndex":function(data,compare){ var v = N.toArray(data); for(var i in v) if(compare == v[i]) return N.toNumber(i); },
-			"arrayIndex":function(array,compare){ if(N.isArray(array))for(var i=0,l=array.length;i<l;i++)if(array[i] === compare)return i; return -1;},
+			"dataIndex":function(data,compare){ var v = CORE.AS_ARRAY(data); for(var i in v) if(compare == v[i]) return N.toNumber(i); },
+			"arrayIndex":function(array,compare){ if(CORE.TYPEOF.LIKEARRAY(array))for(var i=0,l=array.length;i<l;i++)if(array[i] === compare)return i; return -1;},
 			// 배열안의 배열을 풀어냅니다.
-			"dataFlatten":N.PIPE_FUNCTION(function(){ return N.argumentsFlatten(arguments); },1),
+			"flatten":CORE.PIPE(function(){ return N.argumentsFlatten(arguments); },1),
 			//값을 플래튼하여 실행함
-			"argumentsFlatten":function(){ var result = []; function arrayFlatten(args){ N.each(args,function(arg){ if(N.isArray(arg)) return N.each(arg,arrayFlatten); result.push(arg); }); } arrayFlatten(arguments); return result; },
+			"argumentsFlatten":function(){ var result = []; function arrayFlatten(args){ N.each(args,function(arg){ if(CORE.TYPEOF.LIKEARRAY(arg)) return N.each(arg,arrayFlatten); result.push(arg); }); } arrayFlatten(arguments); return result; },
 			//owner를 쉽게 바꾸면서 함수실행을 위해 있음
-			"APPLY" : function(f,owner,args) { if( typeof f === "function" ) { args = N.cloneArray(args); return (args.length > 0) ? f.apply(owner,args) : f.call(owner); } },
+			"APPLY" : function(f,owner,args) { if( typeof f === "function" ) { args = CORE.NEW_ARRAY(args); return (args.length > 0) ? f.apply(owner,args) : f.call(owner); } },
 			"FLATTENCALL" : function(f,owner) { return N.APPLY(f,owner,N.argumentsFlatten(Array.prototype.slice.call(arguments,2))); },
 			"CALL"    :function(f,owner){ return (typeof f === "function") ? ((arguments.length > 2) ? f.apply(owner,Array.prototype.slice.call(arguments,2)) : f.call(owner)) : undefined; },
 			"CALLBACK":function(f,owner){ return (typeof f === "function") ? ((arguments.length > 2) ? f.apply(owner,Array.prototype.slice.call(arguments,2)) : f.call(owner)) : f; },
-			//배열이 아니면 배열로 만들어줌
-			"toArray":TO_ARRAY_PROC,
-			//배열이든 아니든 무조건 배열로 만듬
-			"cloneArray":CLONE_ARRAY_PROC,
 			//배열안에 배열을 길이만큼 추가
 			"arrays":function(l) { l=N.toNumber(l);var aa=[];for(var i=0;i<l;i++){ aa.push([]); }return aa; },
 			//숫자로 변환합니다. 디폴트 값이나 0으로 반환합니다.
@@ -828,7 +1072,7 @@
 				return !!probabilityOfTrue && Math.random() <= probabilityOfTrue;
 			},
 			//1:길이와 같이 2: 함수호출
-			"times":N.PIPE_FUNCTION(function(l,f,s){ 
+			"times":CORE.PIPE(function(l,f,s){ 
 				l=N.toNumber(l); var r = []; 
 				if(typeof f === 'string') var fs = f, f = function(i){ return N.exp.seed(i)(fs); };
 				for(var i=(typeof s === 'number')?s:0;i<l;i++) r.push(f(i)); 
@@ -841,129 +1085,38 @@
 		});
 		N.DATAKIT.EACH_TO_METHOD();
 		
-		
 		// 오브젝트 베이스 KIT
 		N.SINGLETON("PROPKIT",{
 			"isModule":IS_MODULE,
 			"isProp":function(source){
 				return (typeof source === "object") || (typeof source === "function");
 			},
-			"toObject":function(param,es,kv){
-				if(typeof param==="object"){
-					return param ? param : {}; //null filter
-				} 
-				if(kv == true && ( typeof param === "string" || typeof es === "string")){ var r = {}; r[es] = param; return r; }
-				if(typeof param==="string" || typeof param==="boolean") {
-					var c = N.TRY_CATCH(function(){
-						if(JSON == aJSON) throw new Error("not json supported browser");
-						var jp = JSON.parse(param);
-						if(typeof jp !== "object") throw new Error("pass");
-					},function(e){
-						if( (new N.StringSource(param)).isDataContent()=="plain" ){
-							var esv = (typeof es === "string" ? es : "value");
-							var reo={};reo[esv]=param;
-							return reo;
-						}
-						return (new N.StringSource(param)).getContentObject();
-					});
-				}
-				return c || {};
-			},
 			"propLength":function(data){ var l = 0; if(typeof data === "object" || typeof data === "function") for(var key in data) l++; return l; },
 			//새로운 객체를 만들어 복사
 			"clone"  : function(target,d) { 
-				if(d) {
-					if(N.isArray(target)) {
-						if(!N.isArray(d)) { d = [] };
-						for (var i=0,l=target.length;i<l;i++) d.push( ((typeof target[i] === "object" && target[i] !== null ) ? N.clone(target[i]) : target[i]) )
-						return d;
-					} else {
-						if(d == true) { d = {} };
-				        for (var p in target) (typeof target[p] === "object" && target[p] !== null && d[p]) ? N.clone(target[p],d[p]) : d[p] = target[p];
-						return d;
-					}
-				
-				}
-				switch(typeof target){
-					case "undefined": case "function": case "boolean": case "number": case "string": return target; break;
-					case "object":
-						if(target === null) return target;
-						if(target instanceof Date){
-							var r=new Date();r.setTime(target.getTime());return r;
-						}
-						if(N.isArray(target)){
-							var r=[]; for(var i=0,length=target.length;i<length;i++)r.push(target[i]); return r;
-						} 
-						if(N.isNode(target) == true){
-							return target;
-						}
-						var r={};
-						for(var k in target){
-							if(target.hasOwnProperty(k))r[k]=target[k];
-						}
-						return r;
-					break;
-					default : console.error("N.clone::copy failed : target => ",target); return target; break;
-				}
+				return CORE.CLONE(target,d);
 			},
 			"diffKeys":function(a,b){
 				if(typeof a === "object" && typeof b === "object"){
-					return N.filter(N.dataFlatten(N.propKey(a),N.propKey(b),N.dataUnique),function(key){
+					return N.filter(N.flatten(N.propKey(a),N.propKey(b),N.dataUnique),function(key){
 						if(a[key] !== b[key]){ return true; }
 					});
 				}
 				return null;
 			},
-			//첫번째 소스에 두번째 부터 시작하는 소스를 반영
-			"extend":function(data){
-				if(typeof data !== "object") return data;
-				for(var i=1,l=arguments.length;i<l;i++) 
-					if( typeof arguments[i] == "object" ) 
-						for(var key in arguments[i]) data[key] = arguments[i][key];
-				return data;
-			},
-			//완전히 새로운 포인터 오브젝트에 다른 소스를 반영
-			"marge":function(data){
-				if(typeof data !== "object") {
-					if(data === undefined) data = {};
-					else data = {data:data};
-				} 
-				return N.extend.apply(undefined,[N.clone(data,true)].concat(Array.prototype.slice.call(arguments,1)));
-			},
-			//fill은 존재하지 않는 키값에 대해서만 적용함 첫번째 소스에 두번째 부터 시작하는 소스를 반영
-			"extendFill":function(data,fillData,forceFill){
-				if(typeof data !== "object") {
-					if(data === undefined) data = {};
-					else data = {data:data};
-				}
-				if(forceFill !== true) forceFill = N.toArray(forceFill);
-				if (forceFill.length || forceFill === true) {
-					for(var key in fillData)  {
-						if( !(key in data) ) data[key] = fillData[key];
-						else if(forceFill === true || N.has(forceFill,key) ) data[key] = fillData[key];
-					} 
-				} else {
-					for(var key in fillData)  if( !(key in data) ) data[key] = fillData[key];
-				}
-				return data;
-			},
-			//완전히 새로운 포인터 오브젝트에 다른 소스를 반영
-			"margeFill":function(data,fillData,forceFill){
-				return N.extendFill(N.clone(data,true),fillData,forceFill);
-			},
 			//오브젝트의 key를 each열거함
-			"propEach":N.PIPE_FUNCTION(function(v,f){
+			"propEach":CORE.PIPE(function(v,f){
 				if(N.isProp(v)){for(k in v) if(f(v[k],k)===false) break;}; 
 				return v;
 			},2),
 			//
-			"propChange":N.PIPE_FUNCTION(function(source,original,change){
+			"propChange":CORE.PIPE(function(source,original,change){
 				if(N.isProp(source) && typeof original === "string" && typeof change === "string") { 
 					source[change] = source[original]; delete source[original]; 
 				}
 				return source;
 			}),
-			"propSet":N.PIPE_FUNCTION(function(source,key){
+			"propSet":CORE.PIPE(function(source,key){
 				if(N.isProp(source) && (typeof key === "string" || typeof key === "number")) {
 					for(var i=2,l=arguments.length;i<l;i++){
 						if(arguments[i] !== undefined || arguments[i] !== NaN){
@@ -974,7 +1127,7 @@
 				}
 				return source;
 			}),
-			"propShift":N.PIPE_FUNCTION(function(source,key){
+			"propShift":CORE.PIPE(function(source,key){
 				var result;
 				if(N.isProp(source) && (typeof key === "string" || typeof key === "number") && (key in source)) {
 					result = source[key];
@@ -982,18 +1135,18 @@
 				}
 				return result;
 			}),
-			"propMap":N.PIPE_FUNCTION(function(v,f){ 
+			"propMap":CORE.PIPE(function(v,f){ 
 				var result = {}; 
 				if(N.isProp(v)) for(var k in v) result[k] = f(v[k],k); return result; 
 				return result;
 			},2),
 			//오브젝트의 key value값을 Array 맵으로 구한다.
-			"propData" :N.PIPE_FUNCTION(function(v,f){ var result = []; if(typeof f !== "function") f = function(v){ return v; }; if(typeof v === "object"){ for(var k in v) result.push(f(v[k],k)); return result; } return result;},2),
-			"propKey"  :N.PIPE_FUNCTION(function(obj,rule,expandKeys){
+			"propData" :CORE.PIPE(function(v,f){ var result = []; if(typeof f !== "function") f = function(v){ return v; }; if(typeof v === "object"){ for(var k in v) result.push(f(v[k],k)); return result; } return result;},2),
+			"propKey"  :CORE.PIPE(function(obj,rule,expandKeys){
 				var r = [];
 				if(typeof rule === "string"){
 					if((rule in obj) || expandKeys === true) r.push(rule);
-				} else if(N.isArray(rule)) {
+				} else if(CORE.TYPEOF.LIKEARRAY(rule)) {
 					if(expandKeys === true){
 						for(var i=0,l=rule.length;i<l;i++) (typeof rule[i] === "string") && r.push(rule[i]);
 					} else {
@@ -1058,10 +1211,16 @@
 	                ("." + numberInfo[1]);
 	            return (numberInfo[0] + floatValue)*1;
 			},
+			"fillLeft":function(str,padLength,fillValue){
+				if(typeof padLength !== "number") return value;
+				if(typeof fillValue !== "string") fillValue = " ";
+				var padLeft="",requirePad = padLength - (str+"").length;
+				for(var i=0,l=requirePad>0?requirePad:0;i<l;i++){ padLeft += fillValue; }
+				return padLeft + str;
+			},
 			"padLeft":function(value,padLength,useFloat){
 				if(typeof padLength !== "number") return value;
-				var padLeft="", numberInfo = N.divideNumber(value);
-				var requirePad = padLength-(numberInfo[0]+"").length;
+				var padLeft="",numberInfo = N.divideNumber(value),requirePad = padLength-(numberInfo[0]+"").length;
 				for(var i=0,l=requirePad>0?requirePad:0;i<l;i++){ padLeft += "0"; }
 				return padLeft + (useFloat === false || !numberInfo[2] ? numberInfo[0] : numberInfo[0] + "." + numberInfo[1] )
 			},
@@ -1111,7 +1270,7 @@
 						if(depth < 1) return "...";
 						if(tosv==null){
 							return jsonfy==true ? '"null"' : "null";
-						} else if(N.isNode(tosv)) {
+						} else if(CORE.TYPEOF.ELEMENT(tosv)) {
 							if(tosv == document) { return '"[document]"'; }
 							//node3
 							var tn = tosv.tagName.toLowerCase();
@@ -1120,7 +1279,7 @@
 							return jsonfy==true ? '"'+tn+ti+tc+'"' : tn+ti+tc; 
 						} else if(N.isTextNode(tosv)) {
 							return '#text '+tosv.textContent;
-						} else if(N.isArray(tosv)){
+						} else if(CORE.TYPEOF.LIKEARRAY(tosv)){
 							//array
 							var result = [];
 							for(var i=0,l=tosv.length;i<l;i++) result.push(N.toString(tosv[i],depth-1,jsonfy));
@@ -1158,7 +1317,7 @@
 					if( target.length > length ){
 						return target.substr(0,length) + suffix;
 					}
-				} else if (N.isArray(target)) {
+				} else if (CORE.TYPEOF.LIKEARRAY(target)) {
 					if (target.length > length) target.length = length;
 				}
 				return target;
@@ -1168,7 +1327,7 @@
 			},
 			// 참고! : human readable month
 			"dateExp":function(dv,format,pad){
-				if(N.isArray(dv)) dv = dv.join(' ');
+				if(CORE.TYPEOF.LIKEARRAY(dv)) dv = dv.join(' ');
 			
 				var dt = /(\d\d\d\d|)[^\d]?(\d\d|\d|).?(\d\d|\d|)[^\d]?(\d\d|\d|)[^\d]?(\d\d|\d|)[^\d]?(\d\d|\d|)/.exec(dv);
 				dt[1] = dt[1] || (((new Date()).getYear() + 1900) +'');
@@ -1199,7 +1358,7 @@
 				if( typeof exp === "number") {
 					return exp;
 				}
-				if( N.isArray(exp) && (exp.length == 7) ){
+				if( CORE.TYPEOF.LIKEARRAY(exp) && (exp.length == 7) ){
 					exp = new Date(exp[0], exp[1], exp[2], exp[3], exp[4], exp[5]);
 				}
 				if( exp instanceof Date){
@@ -1248,7 +1407,7 @@
 		});
 		N.PRIMITIVEKIT.EACH_TO_METHOD();
 		
-	})(window,[],{},{},N);
+	})(window,[],{},{},N,CORE);
 	
 	
 	// AMD
@@ -1259,12 +1418,39 @@
 		}
 	}(window));
 	
-	//
-	// ndkit : conversion kit
-	//
+	
+	(function(N,CORE){
 		
-	//Nody Foundation
-	(function(W,N){
+		N.SINGLETON("TOKENKIT",{
+			//Helper of pascalCase,camelCase,snakeCase,kebabCase
+			"CASE_SPLIT":function(s,c){ if(typeof c === "string") return s.split(c) ; if(typeof s !== "string")return console.error("CASE_SPLIT::첫번째 파라메터는 반드시 String이여야 합니다. // s =>",s); s = s.replace(/^\#/,""); /*kebab*/ var k = s.split("-"); if(k.length > 1) return k; /*snake*/ var _ = s.split("_"); if(_.length > 1) return _; /*Cap*/ return s.replace(/[A-Z][a-z]/g,function(s){return "%@"+s;}).replace(/^\%\@/,"").split("%@"); },
+			//to PascalCase
+			"pascalCase":CORE.PIPE(function(s){ var words = N.CASE_SPLIT(s); for(var i=0,l=words.length;i<l;i++) words[i] = words[i].charAt(0).toUpperCase() + words[i].slice(1).toLowerCase(); return words.join(""); },1),
+			//to camelCase
+			"camelCase":CORE.PIPE(function(s){ var words = N.CASE_SPLIT(s); for(var i=1,l=words.length;i<l;i++) words[i] = words[i].charAt(0).toUpperCase() + words[i].slice(1).toLowerCase(); words[0] = words[0].toLowerCase(); return words.join(""); },1),
+			//to snake_case
+			"snakeCase":CORE.PIPE(function(s){ var words = N.CASE_SPLIT(s); for(var i=0,l=words.length;i<l;i++) words[i] = words[i].toLowerCase(); return words.join("_"); },1),
+			//to kebab-case
+			"kebabCase":CORE.PIPE(function(s){ var words = N.CASE_SPLIT(s); for(var i=0,l=words.length;i<l;i++) words[i] = words[i].toLowerCase(); return words.join("-"); },1),
+			"split":CORE.PIPE(function(d,s){
+				return d.split("",s);
+			},1),
+			"hasToken":CORE.PIPE(function(d,t,s){
+				return N.has(d.split(s || " "),t);
+			},1),
+			"addToken":CORE.PIPE(function(d,t,s){
+				if(N.hasToken.BOOST(d,t,s)){
+					return d;
+				} else {
+					return d + (s || " ") + t;
+				}
+			},1),
+			"removeToken":CORE.PIPE(function(d,t,s){
+				console.warn("todo");
+			},1)
+		});
+		N.TOKENKIT.EACH_TO_METHOD();
+		
 		N.SINGLETON("ADVKIT",{
 			"scalef":function(scale,value,total){
 				return (typeof value === "number"?value:100) / (typeof total === "number"?total:100) * scale;
@@ -1305,8 +1491,8 @@
 			},
 			"toPx":function(v){ if( /(\%|px)$/.test(v) ) return v; return N.toNumber(v)+"px"; },
 			//래핑된 텍스트를 제거
-			"isWrap":function(c,w){ if(typeof c === "string"){ c = c.trim(); w = typeof w !== "undefined" ? N.toArray(w) : ['""',"''","{}","[]"]; for(var i=0,l=w.length;i<l;i++){ var wf = w[i].substr(0,w[i].length-1); var we = w[i].substr(w[i].length-1); if(c.indexOf(wf)==0 && c.substr(c.length-1) == we) return true; } } return false; },
-			"unwrap":function(c,w){ if(typeof c === "string"){ c = c.trim(); w = typeof w !== "undefined" ? N.toArray(w) : ['""',"''","{}","[]","<>"]; for(var i=0,l=w.length;i<l;i++) if(N.isWrap(c,w[i])) return c.substring(w[i].substr(0,w[i].length-1).length,c.length-1); } return c; },
+			"isWrap":function(c,w){ if(typeof c === "string"){ c = c.trim(); w = typeof w !== "undefined" ? CORE.AS_ARRAY(w) : ['""',"''","{}","[]"]; for(var i=0,l=w.length;i<l;i++){ var wf = w[i].substr(0,w[i].length-1); var we = w[i].substr(w[i].length-1); if(c.indexOf(wf)==0 && c.substr(c.length-1) == we) return true; } } return false; },
+			"unwrap":function(c,w){ if(typeof c === "string"){ c = c.trim(); w = typeof w !== "undefined" ? CORE.AS_ARRAY(w) : ['""',"''","{}","[]","<>"]; for(var i=0,l=w.length;i<l;i++) if(N.isWrap(c,w[i])) return c.substring(w[i].substr(0,w[i].length-1).length,c.length-1); } return c; },
 			"wrap":function(c,w){ if(!N.isWrap(c,w)){ c = typeof c === "string" ? c.trim() : ""; w = typeof w === "string" ? w.length > 1 ? w : '""' : '""'; return w.substr(0,w.length-1) + c + w.substr(w.length-1); } return c; },
 			//쿼테이션을 무조건 적용
 			"DQURT":function(c){ if(typeof c === "string"){ if(N.isWrap(c,'""')) return c; return '"'+N.unwrap(c,"''")+'"'; } return c; },
@@ -1330,8 +1516,8 @@
 			},
 			// 아래 N.indexes 함수들은 어떠한 위치를 제외한 인덱싱을 위해 존재함
 			"safeSplitIndexes":function(c,idx,safe){
-				if(typeof c === "string" && N.isArray(idx)){
-					var indexes = N.clone(idx);
+				if(typeof c === "string" && CORE.TYPEOF.LIKEARRAY(idx)){
+					var indexes = CORE.CLONE(idx);
 					indexes.push(c.length);
 					var result  = [];
 					var past    = 0;
@@ -1363,7 +1549,7 @@
 				}
 			},
 			"indexesRange":function(f,e){
-				if(N.isArray(f) && N.isArray(e)){
+				if(CORE.TYPEOF.LIKEARRAY(f) && CORE.TYPEOF.LIKEARRAY(e)){
 					var flag = [];
 					var value= [];
 					var fi = 0;
@@ -1411,7 +1597,7 @@
 						}
 					}
 					return result;
-				} else if(N.isArray(f) && typeof e === "undefined"){
+				} else if(CORE.TYPEOF.LIKEARRAY(f) && typeof e === "undefined"){
 					var result = [];
 					var stack  = [];
 					for(var i=0,l=f.length;i<l;i++){
@@ -1430,7 +1616,7 @@
 						console.wran("N.safeSplit:: 두번째 파라메터는 1글자만 지원합니다. => ",s);
 						s = s.substr(0,1);
 					}
-					w = typeof w !== "undefined" ? N.toArray(w) : ["{}","[]"];
+					w = typeof w !== "undefined" ? CORE.AS_ARRAY(w) : ["{}","[]"];
 					c = N.unwrap(c,w);
 					var outSplit = [];
 					for(var i=0,l=w.length;i<l;i++){
@@ -1461,26 +1647,16 @@
 					return N.safeSplitIndexes(c,splitIndexes,safe);
 				}
 			},
-			//Helper of pascalCase,camelCase,snakeCase,kebabCase
-			"CASE_SPLIT":function(s,c){ if(typeof c === "string") return s.split(c) ; if(typeof s !== "string")return console.error("CASE_SPLIT::첫번째 파라메터는 반드시 String이여야 합니다. // s =>",s); s = s.replace(/^\#/,""); /*kebab*/ var k = s.split("-"); if(k.length > 1) return k; /*snake*/ var _ = s.split("_"); if(_.length > 1) return _; /*Cap*/ return s.replace(/[A-Z][a-z]/g,function(s){return "%@"+s;}).replace(/^\%\@/,"").split("%@"); },
-			//to PascalCase
-			"pascalCase":function(s){ var words = N.CASE_SPLIT(s); for(var i=0,l=words.length;i<l;i++) words[i] = words[i].charAt(0).toUpperCase() + words[i].slice(1).toLowerCase(); return words.join(""); },
-			//to camelCase
-			"camelCase":function(s){ var words = N.CASE_SPLIT(s); for(var i=1,l=words.length;i<l;i++) words[i] = words[i].charAt(0).toUpperCase() + words[i].slice(1).toLowerCase(); words[0] = words[0].toLowerCase(); return words.join(""); },
-			//to snake_case
-			"snakeCase":function(s){ var words = N.CASE_SPLIT(s); for(var i=0,l=words.length;i<l;i++) words[i] = words[i].toLowerCase(); return words.join("_"); },
-			//to kebab-case
-			"kebabCase":function(s){ var words = N.CASE_SPLIT(s); for(var i=0,l=words.length;i<l;i++) words[i] = words[i].toLowerCase(); return words.join("-"); },
 			//길이만큼 늘립니다.
-			"dataClip":N.PIPE_FUNCTION(function(v,l,ex){
-				var d = N.cloneArray(v);
+			"dataClip":CORE.PIPE(function(v,l,ex){
+				var d = CORE.NEW_ARRAY(v);
 				if(typeof l !== 'number' || d.length === l) return d;
 				if (d.length > l) return Array.prototype.slice.call(d,0,l);
 				N.times(l - d.length,function(){ d.push(ex); });
 				return d;
 			},2),
-			"dataRepeat":N.PIPE_FUNCTION(function(v,l){
-				var d = N.cloneArray(v);
+			"dataRepeat":CORE.PIPE(function(v,l){
+				var d = CORE.NEW_ARRAY(v);
 				if(typeof l !== 'number' || d.length === l) return d;
 				if (d.length > l) return Array.prototype.slice.call(d,0,l);
 				N.times(l - d.length,function(){ d.push(v); });
@@ -1491,7 +1667,7 @@
 				var base;
 				switch(typeof v){
 					case "string":case "number": base = v; break;
-					case "object":if(N.isArray(v)){base = v;}else{ console.warn("N.dataTile::Array만 가능합니다."); return v;} break;
+					case "object":if(CORE.TYPEOF.LIKEARRAY(v)){base = v;}else{ console.warn("N.dataTile::Array만 가능합니다."); return v;} break;
 				}
 				if(typeof base === "undefined"){ return ; } else {
 					var baseLength = N.toLength(v);
@@ -1591,7 +1767,7 @@
 			},
 			// 1,2,3,4 => random any
 			"zoneChoice":function(value,split){
-				if( N.isArray(value) ) return value[Math.floor(Math.random()*(value.length))];
+				if( CORE.TYPEOF.LIKEARRAY(value) ) return value[Math.floor(Math.random()*(value.length))];
 				var cache = N.cache.get("N.zoneChoice",value+split);
 				if(cache) return cache[Math.floor(Math.random()*(cache.length))];
 				var cachedata = value.split(typeof split === "string"?split:"|");
@@ -1641,8 +1817,8 @@
 	
 	
 		N.METHOD("exp",function(source){
-			var $seed     = this.$seed || 0;
-			var keysValue = this.$names || [];
+			var $seed  = this.$seed || 0;
+			var $names = this.$names || [];
 			var aPoint=[],params = N.map(Array.prototype.slice.call(arguments,1),function(t){ return N.zoneInfo(t); });
 			return source.replace(/(\\\([^\)]*\)|\\\{[^\}]*\})/g,function(s){
 				if(s[s.length-1] == ')') {
@@ -1685,7 +1861,7 @@
 			seed:function($seed){ 
 				this.$seed = N.toNumber($seed);
 			},
-			named:function(){
+			names:function(){
 				this.$names = Array.prototype.slice.call(arguments);
 			}
 		});
@@ -1700,11 +1876,278 @@
 			}
 		});
 		
+		//******************
+		// NodyArray
+		N.ARRAY_MODULE("Array",{
+			each     : function(block) { for ( var i=0,l=this.length;i<l;i++) { if( block(this[i],i) == false ) break; } return this; },
+			reverseEach : function(block) { for ( var i=this.length-1;i>-1;i--) { if( block(this[i],i) == false ) break; } return this; },
+			keys  : function(rule){ return N.propKey(this,rule); },
+			zero  :function(){ return N.get(this,0); },
+			first :function(){ return N.get(this,0); },
+			last :function(){ return N.last(this); },
+			from :function(index){ return this[index]; },
+			has:function(v){ for(var i=0,l=this.length;i<l;i++) if(this[i] === v) return true; return false; },
+			push : function(v,i){ switch(typeof i){ case "string": case "number": this[i] = v; break; default: Array.prototype.push.call(this,v); break; } return this; },
+			add :function(v,i){ if( !this.has(v) ) this.push(v,i); return this; },
+			marge:function(array){
+				var _self = this;
+				N.each(array,function(v){ _self.add(v); });
+				return this;
+			},
+			setSource : function(v){
+				if( CORE.TYPEOF.LIKEARRAY(v) ) {
+					if("toArray" in v){
+						Array.prototype.splice.apply(this,[0,this.length].concat(v.toArray()));
+					} else {
+						Array.prototype.splice.apply(this,[0,this.length].concat(Array.prototype.slice.call(v)));
+					}
+					return this;
+				} else {
+					if(v||v==0){
+						Array.prototype.splice.call(this,0,this.length,v);
+					} else {
+						Array.prototype.splice.call(this,0,this.length);
+					}
+					return this;
+				}
+			},
+			//값의 길이
+			isNone:function(){ return (this.length === 0) ? true : false },
+			isOne:function(){ return (this.length === 1) ? true : false },
+			isMany:function(){ return (this.length > 1) ? true : false },
+			isOk:function(){ return (this.length > 0) ? true : false },
+			isNok:function(){ return (this.length === 0) ? true : false},
+			//선택된 값으로 배열이 재정렬 됩니다.
+			selectValue:function(value){ var selects = []; N.each(this,function(v){ if(v == value) selects.push(v); }); this.setSource(selects); },
+			selectIndex:function(index){ return this.setSource(this[index]); },
+			selectFirst:function(){ return this.setSource(this[0]); },
+			selectLast :function(){ return this.setSource(this[this.length-1]); return this; },
+			//배열의 길이를 조절합니다.
+			max:function(length) { this.length = length > this.length ? this.length : length; return this; },
+			min:function(length,undefTo){var count=parseInt(length);if(typeof count=="number")if(this.length<count)for(var i=this.length;i<count;i++)this.push(undefTo);return this;},
+			//원하는 위치에 대상을 삽입합니다.
+			insert: function(v,a){ 
+				N.insert(this,v,a);
+				return this;
+			},
+			// 순수 Array로 반환
+			toArray  : function() { return Array.prototype.slice.call(this); },
+			//내부요소 모두 지우기
+			clear   : function() { this.splice(0,this.length); return this; },
+			clone:function(){ return new N.Array(this);},
+			//filter function(a,b){ return a>b; } => [a,b];
+			sort:function(filter){
+				if(typeof filter !== "function") {
+					return Array.prototype.sort.call(new N.Array(this));
+				}
+				if(this.length == 0){
+					return this.toArray();
+				}
+				var result = new N.Array([this[0]]);
+				for(var i=1,l=this.length;i<l;i++) for(var ri=0,rl=result.length;ri<rl;ri++){
+					if(filter(this[i],result[ri]) === true){
+						result.insert(this[i],ri);
+						break;
+					}
+					if((ri + 1) === result.length){
+						result.push(this[i]);
+					}
+				}
+				return result;
+			},
+			setSort:function(filter){
+				if(typeof filter !== "function") {
+					return Array.prototype.sort.call(this);
+				} else {
+					return this.setSource(this.sortFilter(filter));
+				}
+			},
+			callback:function(f){
+				if(typeof f === "function"){ return f.call(this,this); }
+			},
+			//뒤로부터 원하는 위치에 대상을 삽입합니다.
+			behind: function(v,a){ return this.insert(v, this.length - (isNaN(a) ? 0 : parseInt(a)) ); },
+			//원하는 위치에 대상을 덮어씁니다.
+			overwrite : function(v,a){ this.min(a+1); this[a] = v; return this; },
+			// 현재의 배열을 보호하고 새로운 배열을 반환한다.
+			save : function(v){ return this.__NativeInitializer__(this); },
+			//array안의 array 풀어내기
+			flatten : function(){ return new N.Array(N.argumentsFlatten(this)); },
+			setFlatten    : function(){return this.setSource(this.flatten());},
+			//다른 배열 요소를 덛붙인다.
+			concat : function(){ return new N.Array(arguments).inject(this.save(),function(v,_a){ new N.Array(v).each(function(v2){ _a.push(v2); }); }); },
+			setConcat    : function(){ return this.setSource(this.concat.apply(this,arguments)); },
+			//
+			append:function(a){
+				if(a === undefined || a === null) return this;
+				if( !CORE.TYPEOF.LIKEARRAY(a) ) return this.push(a);
+				for(var i=0,l=a.length;i<l;i++) this.push(a[i]);
+				return this;
+			},
+			prepend:function(a){
+				if(a === undefined || a === null) return this;
+				if( !CORE.TYPEOF.LIKEARRAY(a) ) return this.insert(a,0);
+				for(var i=0,l=a.length;i<l;i++) this.insert(a[i],i);
+				return this;
+			},
+			//어떠한 요소끼리 위치를 바꾼다
+			changeIndex:function(leftIndex,rightIndex){
+				var left  = this[leftIndex];
+				var right = this[rightIndex];
+				this[leftIndex]  = right;
+				this[rightIndex] = left;
+			},
+			// 리턴한 요소를 누적하여 차례로 전달함
+			inject:function(firstValue,method) { for(var i = 0,l = this.length;i<l;i++) { var returnValue = method(this[i],firstValue,i); if(typeof returnValue !== "undefined") firstValue = returnValue; } return firstValue; },
+			// 상속대상도 map의 결과는 이 모듈이여야 합니다.
+			map:function(process)    { return new N.Array(N.map(this,process)); },
+			setMap:function(process) { return N.arrayMap(this,process); },
+			// index가 maxIndex한계값이 넘으면 index가 재귀되어 반환된다.
+			turning:function(maxIndex,method){
+				var NI = parseInt(maxIndex);
+			   	var t  = function(cIndex) { if(cIndex < 0) { var abs = Math.abs(cIndex); cIndex = NI-(abs>NI?abs%NI:abs); }; return (NI > cIndex)?cIndex:cIndex%NI; };
+				var ti = function(cIndex) { return { "turning" : t(cIndex), "group"   : Math.floor(cIndex/NI) } };
+				for(var i = 0; i < this.length ; i++) { var tio = ti(i); method(this[i],tio.turning,tio.group,i); }
+				return this;
+			},
+			// true를 반환하면 새 배열에 담아 리턴합니다.
+			filter   : function(filterMethod) { 
+				if(typeof filterMethod === "undefined") { filterMethod = function(a){ return typeof a === "undefined" ? false : true; }; } 
+				if(typeof filterMethod === "function"){
+					var result=[]; 
+					this.each(function(v,i){ if(true==filterMethod(v,i)){ result.push(v); } });
+					return new N.Array(result);
+				}
+				return new N.Array();
+			},
+			setFilter      : function(filterMethod) { return this.setSource(this.filter(filterMethod)); },
+			// undefined요소를 제거한다.
+			compact : function(){ return this.filter(function(a){ return a == undefined ? false : true; }); },
+			setCompact    : function(){ return this.setSource(this.compact());},
+			// time // 오버라이팅
+			timesmap : function(time,method,start,end){
+				var _ = this;
+				var length = _.length;
+				var result = this.clone();
+				var timef  = (typeof method === 'function') ? method : function(){return method;}
+	
+				N.times(time,function(i){
+					if( length <= i ) result.push( timef(_[i],i) ); else result[i] = timef(_[i],i);
+				},start,end);
+	
+				return result;
+			},
+			setTimesmap:function(time,method,start,end){ return this.setSource(this.timesmap(time,method,start,end)); },
+			// 파라메터 함수가 모두 true이면 true입니다.
+			isAll:function(passMethod) { for(var i=0,l=this.length;i<l;i++) if(passMethod(this[i],i) != true) return false; return true; },
+			// 하나라도 참이면 true입니다
+			isAny:function(passMethod) { for(var i=0,l=this.length;i<l;i++) if(passMethod(this[i],i) == true) return true; return false; },
+			//substr처럼 array를 자른다.
+			subarray:function(fi,li,infinity){
+				fi = isNaN(fi) == true ? 0 : parseInt(fi);
+				li = isNaN(li) == true ? 0 : parseInt(li);
+				var nl,ns,result = new N.Array();
+				if (fi > li) {
+					nl = fi;
+					ns = li;
+				} else {
+					nl = li;
+					ns = fi;
+				}
+				//제한
+				if(infinity !== true){
+					nl = nl < this.length ? nl : this.length;
+					ns = ns > 0 ? ns : 0;
+				}
+				for(var i=ns,l=nl;i<l;i++) result.push(this[i]);
+				return result;
+			},
+			setSubarray:function() { return this.setSource(this.subarray.apply(this,arguments));},
+			subarr:function(fi,li) { return this.subarray(fi,li ? li + fi : this.length); },
+			setSubarr:function(fi,li){return this.setSource(this.subarr(fi,li));},
+			//해당되는 인덱스를 제거
+			drop:function(index){ index=index?index:0;return this.subarray(index).concat(this.subarr(index+1)); },
+			setDrop:function(index) { return this.setSource(this.drop(index)); },
+			// 인수와 같은 요소를 제거한다.
+			getRemove:function(target) { return this.filter(function(t){ if(t == target) return false; return true; }); },
+			remove:function(target) { return this.setSource(this.getRemove(target)); },
+			// 요소중의 중복된 값을 지운다.
+			unique:function(){var result=new N.Array();this.each(function(selfObject){if(result.isAll(function(target){return selfObject!=target;}))result.push(selfObject);});return result;},
+			setUnique:function(){return this.setSource(this.unique());},
+			// 인수가 요소안에 갖고있다면 true가 반환
+			has : function(h) { return this.isAny(function(o) { return o == h; }); },
+			// index위치에 있는 요소를 얻어온다.
+			eq:function(index,length){if(isNaN(length))length=1;return this.subarr(index,length);},
+			// 요소중 처음으로 일치하는 index를 반환한다.
+			indexOf:function(target){var result=-1;this.each(function(t,i){if(t==target){result=i;return false;}});return result;},
+			lastIndexOf:function(target){var result=-1;this.reverseEach(function(t,i){if(t==target){result=i;return false;}});return result;},
+			//todo
+			nthIndexOf:function(nth,target){
+		
+			},
+			// 첫번째부터 참인 오브젝트만 반환합니다. //마지막부터 참인
+			firstMatch:function(matchMethod){var result;this.each(function(value,index){if(matchMethod(value,index)==true){result=value;return false;}});return result;},
+			lastMatch:function(matchMethod){var result;this.reverseEach(function(value,index){if(matchMethod(value,index)==true){result=value;return false;}});return result;},
+			//todo
+			nthMatch:function(nth,value,index){
+		
+			},
+			//요소안의 string까지 split하여 flaatten을 실행
+			stringFlatten:function(){ return this.save().setMap(function(t){ if(typeof t === "string") return t.split(" "); if(CORE.TYPEOF.LIKEARRAY(t)) return new N.Array(t).setFlatten().setFilter(function(v){ return N.is(v,"string")}); }).remove(undefined).setFlatten(); },
+			setStringFlatten:function(){ return this.setSource( this.stringFlatten() ); },
+			sliceGroup:function(){
+				var progressIndex = 0;
+				var array  = Array.prototype.slice.call(this);
+				var result = new N.Array();
+				N.each(N.filter(N.argumentsFlatten(arguments),function(n){return typeof n === "number" && n > 0;}),function(i){
+					if(!array.length){
+						return false;
+					}
+					result.push(array.splice(0,i));
+				});
+				array.length && result.push(array);
+				return result;
+			},
+			setSliceGroup:function(){
+				this.setSource(this.sliceGroup.apply(this,Array.prototype.slice.call(arguments)));
+			},
+			//그룹 지어줌
+			groups:function(length,reverse){
+				var result=[];
+				if(reverse == true){
+					this.save().reverse().turning(length,function(obj,i,g){if(!result[g])result[g]=[];result[g].push(obj);});
+					return new N.Array(result).setMap( function(groups){ return new N.Array(groups).reverse().toArray(); } ).reverse();
+				}
+				this.turning(length,function(obj,i,g){if(!result[g])result[g]=[];result[g].push(obj);});
+				return new N.Array(result);
+			},
+			setGroups:function(length,reverse){ return this.setSource(this.groups(length,reverse)); },
+			//랜덤으로 내용을 뽑아줌
+			random:function(length){ return new N.Array(N.dataRandom(this.toArray())); },
+			shuffle:function(){ return new N.Array(N.dataShuffle(this.toArray())); },
+			setShuffle:function(){ return this.setSource(this.shuffle()); },
+			join:function(t,p,s){ return (N.likeString(p)?p:"")+Array.prototype.join.call(this,t)+((N.likeString(s))?s:""); },
+			//Object로 반환
+			keyPair:function(key,value){
+				if (!N.likeString(key)) key = "key";
+				if (!N.likeString(value)) value = "value";
+				var r = {};
+				this.each(function(data){
+					if(typeof data === "object" || typeof data === "function"){
+						if(key in data){
+							r[data[key]] = data[value];
+							return r;
+						}
+					}
+				});
+				return r;
+			}
+		});
 	
 		//******************
 		N.MODULE("HashSource",{
 			setSource:function(obj,k){ 
-				obj = N.toObject(obj,k);
+				obj = N.asObject(obj,k);
 				if(typeof obj === "object"){ 
 					for(var key in this.Source) delete this.Source[key]; 
 					for(var k in obj) this.Source[k] = obj[k]; 
@@ -1733,8 +2176,8 @@
 				if(typeof f === "function") this.call(this,this.Source);
 			},
 			count:function(){return N.propLength(this.Source); },
-			clone:function(){return N.clone(this.Source); },
-			save:function() {return this.__NativeInitializer__(N.clone(this.Source)); },
+			clone:function(){return CORE.CLONE(this.Source); },
+			save:function() {return this.__NativeInitializer__(CORE.CLONE(this.Source)); },
 			//key value get setter
 			pushKeyValue:function(){
 				for(var i=0,l=Math.ceil(arguments.length/2);i<l;i++){
@@ -1804,12 +2247,12 @@
 				if(typeof keyName === "string"){
 					//arrayModule
 					return this.hasDataProp(keyName) ? this.Source[keyName] :
-					       (autoReplace === false) ? new N.Array(this.Source[keyName]) : 
-							this.Source[keyName] = new N.Array(this.Source[keyName]);
+					(autoReplace === false) ? [this.Source[keyName]] : 
+							this.Source[keyName] = [this.Source[keyName]];
 				} else {
 					console.warn('Manage::touchDataProp parameter is must be string',keyName);
 				}
-				return new N.Array();
+				return [];
 			},
 			defineDataProp:function(){
 				var args = N.argumentsFlatten(arguments);
@@ -1830,25 +2273,30 @@
 			},
 			extend:function(o){ N.extend(this.Source,o); return this; },
 			marge:function(o){ return N.marge(this.Source,o); },
-			extendFill:function(o){ N.extendFill(this.Source,o); return this; },
-			margeFill:function(o){ return N.margeFill(this.Source,o); },
+			extendOf:function(o){ N.extendOf(this.Source,o); return this; },
+			margeOf:function(o){ return N.margeOf(this.Source,o); },
 			//.arrangementObjectsDataProp({a:2,b:3,c:4},{b:4,d:4},{a:1,d:5})
 			//"{"a":[2,null,1],"b":[3,4,null],"c":[4,null,null],"d":[null,4,5]}"
 			arrangementObjectsDataProp:function(data){
-				var arrangementKeys = new N.Array(this.keys());
+				
+				var arrangementKeys = this.keys();
 				var args  = Array.prototype.slice.call(arguments);
 				var _self = this;
 				for(var i=0,l=arguments.length;i<l;i++){
 					if(typeof args[i] === "object"){
-						arrangementKeys.marge(N.propKey(args[i]));
+						var keys = Object.keys(args[i]);
+						for(var ki=0,l=keys.length;ki<l;ki++) if(!N.has(arrangementKeys,keys[ki])) {
+							arrangementKeys.push(keys[ki]);
+						}
 					}
 				}
+				
 				for(var i=0,l=args.length;i<l;i++){
-					arrangementKeys.each(function(key){
+					N.each(arrangementKeys,function(key){
 						_self.pushDataProp(key,args[i][key]);
 					});
-					
 				}
+				
 				return this;
 			},
 			setDataPropFix:function(){
@@ -1869,7 +2317,7 @@
 			//map
 			map:function(f,ksel){ 
 				if(typeof f === "function"){
-					var result = N.clone(this.Source),keys = this.keys(ksel,true);
+					var result = CORE.CLONE(this.Source),keys = this.keys(ksel,true);
 					for(var i=0,l=keys.length;i<l;i++) result[keys[i]] = f(this.Source[keys[i]],keys[i]);
 					return result; 
 				}
@@ -1893,7 +2341,16 @@
 			},
 			//오브젝트의 키를 지우고자 할때
 			removeAll:function(){ for( var key in this.Source ) delete this.Source[key]; return this.Source; },
-			getRemove:function(){ var source = this.Source; new N.Array(arguments).setStringFlatten().each(function(key){ delete source[key]; }); return this.Source; },
+			getRemove:function(){ 
+				var source = this.Source; 
+				var keys = N.flatten(arguments);
+				for(var i=0,l=keys.length;i<l;i++){
+					if(typeof keys[i] === "string"){
+						delete source[keys[i]];
+					}
+				}
+				return this.Source; 
+			},
 			remove:function(key){ delete this.Source[key]; return this; },
 			//다른 오브젝트와 함칠때
 			concat:function(){ 
@@ -1925,7 +2382,7 @@
 				this.Source = {};
 				this[s].apply(this,new N.Array(arguments).setSubarr(0,2).toArray());
 			} else {
-				this.Source = N.toObject(p,n);
+				this.Source = N.asObject(p,n);
 			}
 		}, function(k){
 			this.setDataPropFix();
@@ -2013,7 +2470,11 @@
 				return this;
 			},
 			//content
-			abilityFunction  : function(fs,is,js){ var origin = (js==true) ? N.safeSplit(this.Source,fs,["{}","[]",'""',"''"]) : this.Source.trim().split(fs); if(origin[origin.length-1].trim()=="") origin.length = origin.length-1;  return new N.Array(origin).isAll(function(s,i){ return s.indexOf(is) > 0; }) ? origin.length : 0; },
+			abilityFunction  : function(fs,is,js){ 
+				var origin = (js==true) ? N.safeSplit(this.Source,fs,["{}","[]",'""',"''"]) : this.Source.trim().split(fs); 
+				if(origin[origin.length-1].trim()=="") origin.length = origin.length-1;  
+				
+				return new N.Array(origin).isAll(function(s,i){ return s.indexOf(is) > 0; }) ? origin.length : 0; },
 			abilityObject    : function(){ return this.abilityFunction(",",":",true); },
 			abilityParameter : function(){ return this.abilityFunction("&","="); },
 			abilityCss       : function(){ return this.abilityFunction(";",":"); },
@@ -2034,7 +2495,7 @@
 				if(o > 0) return "css";
 				return "plain";
 			},
-			isDataContentFunction:function(fs,is,js){
+			getDataContentWithPattrn:function(fs,is,js){
 				return new N.Array( (js==true) ? N.safeSplit(this.Source,fs,["{}","[]",'""',"''"]) : this.Source.trim().split(fs) ).inject({},function(s,inj){
 					var v = s.substr(s.indexOf(is)+1);
 					if(s.trim().length > 0) inj[ N.unwrap(s.substr(0,s.indexOf(is)),['""',"''"]) ] = N.unwrap((js == true) ? (new N.StringSource(v)).getContentObject(true) : v,['""',"''"]);
@@ -2043,9 +2504,9 @@
 			},
 			getContentObject:function(absoluteWrap){
 				switch(this.isDataContent(absoluteWrap)){
-					case "object"       : return this.isDataContentFunction(",",":",true); break;
-					case "parameter"    : return this.isDataContentFunction("&","="); break;
-					case "css"          : return this.isDataContentFunction(";",":"); break;
+					case "object"       : return this.getDataContentWithPattrn(",",":",true); break;
+					case "parameter"    : return this.getDataContentWithPattrn("&","="); break;
+					case "css"          : return this.getDataContentWithPattrn(";",":"); break;
 					case "array"        :
 						var a = N.safeSplit(this.Source,",",["{}","[]",'""',"''"]);
 						if(a == ""){
@@ -2059,7 +2520,7 @@
 						break;
 					case "plain" : 
 						if(!isNaN(this.Source) && this.Source !== ""){
-							return parseFloat(this.Source);
+							return this.Source.indexOf("0x")==0 ? parseInt(this.Source,16) : parseFloat(this.Source);
 						} else {
 							return this.Source;
 						}
@@ -2082,7 +2543,7 @@
 				return this;
 			},
 			//model
-			removeModel:function(target,space){
+			removeToken:function(target,space){
 				//model split
 				space = space ? space : " ";
 				var models = this.Source.split(space);
@@ -2095,19 +2556,19 @@
 							result.push(models[i]);
 				return result.join(space);
 			},
-			setRemoveModel:function(target,space){
-				this.Source = this.removeModel(target,space);
+			setRemoveToken:function(target,space){
+				this.Source = this.removeToken(target,space);
 				return this;
 			},
-			hasModel:function(target,space){
+			hasToken:function(target,space){
 				space = space ? space : " ";
 				var models = this.Source.split(space);
 				for (var i=0,l=models.length;i<l;i++) if(models[i] == target)  return true;
 				return false;
 			},
-			addModel:function(target,space) { space = space ? space : " ";if(this.hasModel(target,space)) return this.Source; return this.Source + space + target; },
+			addToken:function(target,space) { space = space ? space : " ";if(this.hasToken(target,space)) return this.Source; return this.Source + space + target; },
 			setAddModel:function(target,space){
-				this.Source = this.addModel(target,space);
+				this.Source = this.addToken(target,space);
 				return this;
 			},
 			//prefix suffix
@@ -2120,53 +2581,7 @@
 			}
 			return this;
 		});
+		
+	}(nd,nd.CORE));
 	
-		var UNIQUE_RANDOM_KEYS = [];
-	
-		N.SINGLETON("RANDKIT",{
-			//random
-			base64Token  : "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/",
-			base64Random : function(length,codeAt,codeLength){
-				length     = (isNaN(length)) ? 1 : parseInt(length);
-				codeAt     = (isNaN(codeAt)) ? 0 : parseInt(codeAt);
-				codeLength = (isNaN(codeLength)) ? 64 - codeAt : parseInt(codeLength);
-				var result = "";
-				for(var i=0,l=length;i<l;i++) result = result + this.base64Token.charAt( codeAt + parseInt(Math.random() * codeLength) );
-				return result;
-			},
-			base64UniqueRandom:function(length,prefixKey,codeAt,codeLength){
-				var randomKey;
-				var process = 0;
-				prefixKey = (typeof prefixKey === 'string') ? prefixKey : '';
-				do {
-					var needContinue = false;
-					randomKey        = prefixKey + this.base64Random(length,codeAt,codeLength);
-					N.each(UNIQUE_RANDOM_KEYS,function(recentKey){
-						if(recentKey == randomKey) needContinue = true;
-						return false;
-					});
-				
-					process++;
-				
-					if(process > 100) {
-						console.log("base64UniqueRandom 1000회 이상 랜덤을 생성하였지만 unique 값을 구할수 없었습니다");
-						needContinue = false;
-						randomKey    = undefined;
-					}
-				} while(needContinue);
-			
-				if(randomKey) UNIQUE_RANDOM_KEYS.push(randomKey);
-			
-				return randomKey;
-			},
-			base62Random:function(length) { return this.base64Random(length,0,62); },
-			base62UniqueRandom:function(length,prefix) { return this.base64UniqueRandom(length || 6,prefix,0,62); },
-			random:function(length) { return parseInt(this.base64Random(length,52,10)); },
-			numberRandom:function(length) { return this.base64Random(length,52,10); },
-			base36Random:function(length) { return this.base64Random(length,26,36); },
-			base36UniqueRandom:function(length,prefix) { return this.base64UniqueRandom(length || 6,prefix,26,36); },
-			base26Random:function(length) { return this.base64Random(length,0,52); },
-			base26UniqueRandom:function(length,prefix) { return this.base64UniqueRandom(length || 6,prefix,0,52); }
-		});
-	})(window,N);
 }());

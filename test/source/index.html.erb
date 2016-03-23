@@ -1,7 +1,34 @@
 ---
 title: Welcome to Middleman
 ---
-
+<script src="js/index.js"></script>
 <div>
  	NDKIT test page
 </div>
+
+<placeholder :Timebody id="main"></placeholder>
+
+<template :Timebody>
+	<header nd="|alert">
+		<!-- Default title -->
+	</header>
+	<inventory>
+		<placeholder :Timebar nd="data"></placeholder>
+	</inventory>
+</template>
+
+<template :Timebar>
+	<p nd-for="">bar</p>
+</template>
+
+<script>
+	
+	var data = [
+		{},
+		{},
+		{}
+	];
+	
+	var mainMobile = nd.Mobile.new("#main",data);
+	
+</script>
