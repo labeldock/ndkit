@@ -1,0 +1,25 @@
+{
+  "name": "ndkit",
+  "homepage": "https://github.com/labeldock/ndkit",
+  "authors": [
+    "HO-JUNG AHN <labeldock@me.com>"
+  ],
+  "description": "dhtml script",
+  "moduleType": [],
+  "keywords": [
+    "dhtml"
+  ],
+  "license": "MIT",
+  "private": false,
+  "main": [
+	  "dist/nd.js",
+	  "dist/plugin/nd.webkit.js",
+	  "dist/plugin/nd.interactive.js"
+  ],
+  "ignore": [
+    "**/.*",
+    "node_modules",
+    "bower_components",
+    "test"
+  ]
+}
