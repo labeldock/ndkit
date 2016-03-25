@@ -9,26 +9,53 @@ title: Welcome to Middleman
 <placeholder :Timebody id="main"></placeholder>
 
 <template :Timebody>
-	<header nd="|alert">
-		<!-- Default title -->
+	<header>
+		<h2 nd="title|text"><!-- Default title --></h2>
+		<small nd="description|text"><!-- description --></small>
 	</header>
 	<inventory>
 		<placeholder :Timebar nd="data"></placeholder>
 	</inventory>
+	<aside>
+		<button nd="data|showCountAction">Show count</button>
+	</aside>
 </template>
 
-<template :Timebar>
-	<p nd-for="">bar</p>
+<template :Timeitem>
+	<!-- One of the worries create a repeat -->
+	<li nd-repeat="$this">
+		<p nd="value|text"></p>
+		<button nd="$index|removeItemAction"></button>
+	</li>
 </template>
+
 
 <script>
+	var data = {
+		title:"Time!",
+		description:"this time!"
+		data:[
+			{value:"01"},
+			{value:"02"},
+			{value:"03"}
+		]
+	};
 	
-	var data = [
-		{},
-		{},
-		{}
-	];
+	nd.Role.new("Timebody",{
+		showCountAction:function(data){
+			alert("count" + data);
+		}
+	},function(role,element){
+		//init param
+	});
+	
+	nd.Role.new("Timeitem",{
+		removeItemAction:function(data){
+			this.remove();
+		}
+	},function(role,element){
+		//init param
+	});
 	
 	var mainMobile = nd.Mobile.new("#main",data);
-	
 </script>

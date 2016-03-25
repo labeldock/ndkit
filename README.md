@@ -10,59 +10,60 @@ Enumerate library of javascript
 Context based script
 
 
-## Concept
+## Concept and goal target
 ```javascript
 
-<div id="render-placeholder"></div>
+<placeholder :Timebody id="main"></placeholder>
 
-<template nd-viewmodel="List">
-	<List>
-		<header>
-			<b>{{title}} Items total</b>
-			<var>{{items.length}}</var>
-		</header>
-		<ul nd-childmodel="Item" nd-childprop="items"></ul>
-		<footer>
-			<a class="add-new-item"></a>
-		</footer>
-	</List>
+<template :Timebody>
+	<header>
+		<h2 nd="title|text"><!-- Default title --></h2>
+		<small nd="description|text"><!-- description --></small>
+	</header>
+	<inventory>
+		<placeholder :Timebar nd="data"></placeholder>
+	</inventory>
+	<aside>
+		<button nd="data|showCountAction">Show count</button>
+	</aside>
+</template>
+<template :Timeitem>
+	<!-- One of the worries create a repeat -->
+	<li nd-repeat="$this">
+		<p nd="value|text"></p>
+		<button nd="$index|removeItemAction"></button>
+	</li>
 </template>
 
-<template nd-viewmodel="Item">
-	<Item>
-		<b>{{data.title}}</b>
-		<a class="remove-item-action"></a>
-	</Item>
-</template>
 
 <script>
-	nd.ViewModel("List",function(model){
-		model.node(".add-new-item").on("click",function(){
-			model.update("items",function(items){
-				items.push({title:"untitle"});
-			});
-		});
-		
-		model.change("items",function(items){
-			model.node("ul").toggleClass("hidden",!!items);
-		});
-	});
-
-	nd.ViewModel("Item",function(instance){
-		model.node(".remove-item-action").on("click",function(){
-			model.remove();
-		});
-	});
-	
-	var datacontext = new nd.DataContext({
-		title:"Nody2 list",
-		items:[
-			{title:"item1"},
-			{title:"item2"}
+	var data = {
+		title:"Time!",
+		description:"this time!"
+		data:[
+			{value:"01"},
+			{value:"02"},
+			{value:"03"}
 		]
+	};
+	
+	nd.Role.new("Timebody",{
+		showCountAction:function(data){
+			alert("count" + data);
+		}
+	},function(role,element){
+		//init param
 	});
 	
-	var Presentor = new nd.DataPresentor("#render-placeholder",datacontext);
+	nd.Role.new("Timeitem",{
+		removeItemAction:function(data){
+			this.remove();
+		}
+	},function(role,element){
+		//init param
+	});
+	
+	var mainMobile = nd.Mobile.new("#main",data);
 </script>
 
 ```
