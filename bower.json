@@ -1,16 +1,15 @@
 {
   "name": "ndkit",
+  "version": "0.0.0",
   "homepage": "https://github.com/labeldock/ndkit",
   "authors": [
     "HO-JUNG AHN <labeldock@me.com>"
   ],
   "description": "dhtml script",
-  "moduleType": [],
   "keywords": [
     "dhtml"
   ],
   "license": "MIT",
-  "private": false,
   "main": [
 	  "dist/nd.js",
 	  "dist/plugin/nd.webkit.js",
