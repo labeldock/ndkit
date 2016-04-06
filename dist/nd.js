@@ -11,7 +11,7 @@
 	
 		// Nody version
 		// This is pre release version
-		N.VERSION = "0.0 alpah pre", N.BUILD = "8";
+		N.VERSION = "0.0 alpah pre", N.BUILD = "12";
 		
 		// Core verison
 		N.CORE_VERSION = "3.0", N.CORE_BUILD = "100";
@@ -344,6 +344,18 @@
 			return func;
 		};
 		
+		CORE.KNOWN = {
+			TIMESCALE:[
+				{key:"year",scale:31536000000},
+				{key:"month",scale:2678400000},
+				{key:"day",scale:86400000},
+				{key:"hour",scale:3600000},
+				{key:"minute",scale:60000},
+				{key:"second",scale:1000},
+				{key:"ms",scale:1}
+			]
+		};
+		
 		CORE.TYPEOF  = {
 			VENDER:function(o){ return (typeof o === "object" && o !== null ) ? ("jquery" in o) ? true : false : false; },
 			LIKEARRAY:function(a){ return (typeof a === "object" && a !== null ) ? (((a instanceof Array || a instanceof NodeList || a instanceof HTMLCollection || CORE.TYPEOF.VENDER(a) || ( !isNaN(a.length) && isNaN(a.nodeType))) && !(a instanceof Window) ) ? true : false) : false; },
@@ -403,7 +415,7 @@
 		};
 		
 		CORE.CLONE = function(target,d){
-			if(d) {
+			if(d == true) {
 				if(CORE.TYPEOF.LIKEARRAY(target)) {
 					if(!CORE.TYPEOF.LIKEARRAY(d)) { d = [] };
 					for (var i=0,l=target.length;i<l;i++) d.push( ((typeof target[i] === "object" && target[i] !== null ) ? CORE.CLONE(target[i]) : target[i]) )
@@ -478,8 +490,45 @@
 			}
 		};
 		
+		CORE.ENUM = {
+			EACH:function(d,f){
+				var d=CORE.AS_ARRAY(d);
+				for(var i=0,l=d.length;i<l;i++) if( f(d[i],i) == false ) break;
+				return d;
+			},
+			MAP:function(d,f){
+				var d=CORE.AS_ARRAY(d);
+				for(var i=0,l=d.length;i<l;i++) d[i]=f(d[i],i);
+				return d;
+			},
+			INJECT:function(d,f){
+				var d=CORE.NEW_ARRAY(d);
+				for(var i=0,l=d.length;i<l;i++) d[i]=f(d[i],i);
+				return d;
+			},
+			REDUCE:function(d,f){
+				var d=CORE.NEW_ARRAY(d);
+				for(var i=0,l=d.length;i<l;i++) d=f(d,d[i],i);
+				return d;
+			},
+			FOREACH:function(d,f){
+				for(var k in d) if( f(d[k],k) == false ) break;
+				return d;
+			},
+			FORMAP:function(d,f){
+				for(var k in d) d[k] = f(d[k],k);
+				return d;
+			}
+		};
 		
 		CORE.INDEX = {
+			LIMIT:function(i,m,s){
+				if(typeof m !== "number") return i;
+				if(typeof s !== "number") s = 0;
+				if(i > m) return m;
+				if(i < s) return s;
+				return i;
+			},
 			PAGE:function(i,p){ return Math.floor(i/p); },
 			REVERSE:function(i,p){ return (p-1) - i },
 			TURN:function(i,p){ if(i < 0) { var abs = Math.abs(i); i = p-(abs>p?abs%p:abs); }; return (p > i)?i:i%p; },
@@ -487,15 +536,23 @@
 		};
 		
 		
-		
+		//vector based range
 		CORE.NDZONE = CORE.NDCLASS(function(source,step){
+			if(source instanceof CORE.NDZONE){
+				this.$type  = source.$type;
+				this.$stuff = source.$stuff;
+				this.$step  = source.$step;
+				return;
+			}
+			
 			this.$step     = N.parseFloat(step) || 1;
 			
 			if(CORE.TYPEOF.ARRAY(source)){
-				if(step){
-					source = source[0] + "-" + source[source.length-1];
+				if(step == false){
+					this.$type  = "arrange";
+					this.$stuff = CORE.CLONE(source);
 				} else {
-					source = source.join("||");
+					source = source[0] + "-" + source[source.length-1];
 				}	
 			}
 						
@@ -522,14 +579,16 @@
 			}
 			
 			this.$type  = "arrange";
-			this.$stuff = [source,undefined];
+			this.$stuff = [source];
 		},{
+			clone:function(){
+				return new CORE.NDZONE(this);
+			},
 			range:function(requireNumber){
 				if(this.$cache) return this.$cache;
 				switch(this.$type){
 					case "range":
 						return this.$cache = nd.range(N.parseFloat(this.$stuff[2]),N.parseFloat(this.$stuff[0]),this.$step,true);
-						break;
 					case "arrange":
 						return this.$cache = (requireNumber==true ?  N.map(this.$stuff[0].split(this.$stuff[1]),function(n){return N.parseFloat(n)}) : this.$stuff[0].split(this.$stuff[1]));
 				}
@@ -554,9 +613,6 @@
 				var sa = range[si+1];
 				return typeof sa == "undefined" ? s : (v - s) < (sa - v) ? s : sa;
 			},
-			vector:function(v){
-				return this.minimum() + ((this.length()-1) / 100 * v);
-			},
 			length:function(){
 				if(this.$type==="range"){
 					// TODO:not full tested
@@ -572,6 +628,9 @@
 					return this.range().length;
 				}
 			},
+			step:function(){
+				return this.$step;
+			},
 			maximum:function(v){
 				//set
 				if(this.$type==="range") {
@@ -580,7 +639,7 @@
 						return this.$stuff[2] = v, this;
 					} else {
 						var max = N.parseFloat(this.$stuff[2]);
-						return max - (this.$step % max);
+						return max;
 					}
 				}
 				return N.last(this.range(typeof v==="boolean"?v:true));
@@ -595,8 +654,23 @@
 						return N.parseFloat(this.$stuff[0]);
 					}
 				}
-				
 				return N.first(this.range(typeof v==="boolean"?v:true));
+			},
+			valueAt:function(i,iproc){
+				var i=(iproc || CORE.INDEX.LIMIT)(i,this.length());
+				
+				switch(this.$type){
+					case "range":
+						return this.minimum() + (this.$step * i);
+					case "arrange":
+						return this.range()[i];
+				}
+			},
+			vectorByValue:function(v){
+				return (v - this.minimum()) / this.size();
+			},
+			valueByVector:function(v){
+				return this.minimum() + this.size() * v;
 			},
 			isInner:function(z){
 				if(!(z instanceof CORE.NDZONE)) z = new CORE.NDZONE(z);
@@ -619,35 +693,92 @@
 			}
 		});
 		
-		CORE.NDDOMAIN = CORE.NDCLASS(function(domain,exchange){
-			this.$domain = new CORE.NDZONE(domain);
-			this.$range  = new CORE.NDZONE(range);
-			this.$scale  = this.$domain.length() / this.$range.length();
-			
+		CORE.NDCURSOR = CORE.NDCLASS(function(v,getter){
+			//[num...]
+			this.$cursor=[];
+			this.$ranges=[];
+			this.setCursor(v);
+			this.$getter = getter;
 		},{
-			
+			setCursor:function(v){
+				for(var i=0,d=CORE.AS_ARRAY(v),l=d.length;i<l;i++){ 
+					if(typeof d[i] === "undefined"){
+						continue;
+					} else if(d[i] instanceof CORE.NDZONE ){
+						this.$ranges[i] = d[i];
+						this.$cursor[i] = 0;
+					} else {
+						this.$ranges[i] = undefined;
+						this.$cursor[i] = CORE.NUMBER.FLOAT(d[i]); 
+					}					
+				}
+			},
+			getCursor:function(v){
+				return this.$cursor;
+			},
+			getValue:function(){
+				var $ranges=this.$ranges,$getter=this.$getter;
+				
+				return CORE.ENUM.MAP(CORE.CLONE(this.$cursor),function(v,i){
+					var val = $ranges[i] ? $ranges[i].valueAt(v,CORE.INDEX.TURN) : v;
+					return (typeof $getter === "function") ? $getter(val,i) : val;
+				});
+			},
+			getRotate:function(){
+				var ranges = this.$ranges;
+				return CORE.ENUM.INJECT(this.$cursor,function(v,i){
+					var range = ranges[i];
+					if(range) {
+						return Math.floor(v * range.step() / range.size()) - 1;
+					} else {
+						return undefined;
+					}
+				},[]);
+			},
+			forward:function(t){
+				var ranges=this.$ranges,befRotate=this.getRotate(),t=(t||1);
+				
+				for(var i=0,d=this.$cursor,l=d.length;i<l;i++){
+					d[i] = d[i] + (this.$ranges[i] ? this.$ranges[i].step() * t : t);
+				}
+				
+				return this;
+			},
+			reverse:function(t){
+				var ranges=this.$ranges,befRotate=this.getRotate(),t=(t||1);
+				
+				for(var i=0,d=this.$cursor,l=d.length;i<l;i++){
+					d[i] = d[i] - (this.$ranges[i] ? this.$ranges[i].step() * t : t);
+				}
+				
+				return this;
+			},
+			getGears:function(){
+				return this.$gears;
+			}
 		});
 		
-		CORE.NDCRON = CORE.NDCLASS(function(pattern){
-			var p=[]; pattern.replace(/[0-9\-\*]+/g,function(s){p.push(s);});
-			this.second=p[0]||"*";
-			this.minute=p[1]||"*";
-			this.hour=p[2]||"*";
-			this.month=p[3]||"*";
-			this.week=p[4]||"*";
-			this.year=p[5]||"*";
+		CORE.NDDOMAIN = CORE.NDCLASS(function(domain,exchange){
+			this.$cursors = [];
+			this.setDomain(domain);
+			this.setExchange(exchange);
 		},{
-			parser:function(){
+			setDomain:function(r){ this.$domain = new CORE.NDZONE(r); },
+			setExchange:function(r){ this.$exchange = new CORE.NDZONE(r); },
+			getDomain:function(){ return this.$domain; },
+			getExchange:function(){ return this.$exchange; },
+			scale:function(){ return this.$exchange.size() / this.$domain.size(); },
+			newCursor:function(pos){
+				var $this = this;
 				
-				//(new CORE.NDZONE(this.second=="*"?"0-59":this.second,1))
-				//this.$zone = {
-				//	second:,
-				//	minute:new CORE.NDZONE(this.minute=="*"?"0-59":this.minute),
-				//	hour:new CORE.NDZONE(this.hour=="*"?"0-23":this.hour),
-				//	month:new CORE.NDZONE(this.month=="*"?"1-31":this.month),
-				//	week:new CORE.NDZONE(this.week=="*"?"1-12":this.week),
-				//	year:new CORE.NDZONE(this.year=="*"?"1900-3000":this.year)	
-				//}
+				var newCursor = new CORE.NDCURSOR(pos,function(value,i){
+					var vector = $this.$domain.vectorByValue(value);
+					var result = $this.$exchange.valueByVector(vector);
+					return result;
+				});
+				
+				this.$cursors.push(newCursor);
+				return newCursor;
 			}
 		});
 		
@@ -986,6 +1117,26 @@
 			"push":CORE.PIPE(function(d,v,k){
 				return N.pushOf.BOOST(CORE.CLONE(d),v,k);
 			},2),
+			"has" :function(d,v){ 
+				if(typeof d === "object"){
+					if(CORE.TYPEOF.LIKEARRAY(d)){
+						for(var i=0,l=d.length;i<l;i++) if(d[i] === v) return true; return false; 
+					} else {
+						for(var k in d) if(d[k] === v) return true; return false; 
+					}
+				}
+			},
+			"addOf":CORE.PIPE(function(data,v,k){
+				return N.has(data,v) ? data : N.pushOf.BOOST(data,v,k);
+			},2),
+			"add":CORE.PIPE(function(data,v,k){
+				return N.has(data,v) ? data : N.push.BOOST(data,v,k);
+			},2),
+			"count":function(d){
+				if(typeof d === "object") return d instanceof Array ? d.length : Object.keys(d).length;
+				if(typeof d === "string") return d.length;
+				return 0;
+			},
 			//첫번째 소스에 두번째 부터 시작하는 소스를 반영
 			"extendOf":function(data){
 				if(typeof data !== "object") return data;
@@ -1021,17 +1172,17 @@
 			"marge":function(data,fillData,forceFill){
 				return N.extendOf(CORE.CLONE(data,true),fillData,forceFill);
 			},
-			"all":DATA_ALL_PROC,
-			"any":DATA_ANY_PROC,
-			"has" :function(d,v){ 
-				if(typeof d === "object"){
-					if(CORE.TYPEOF.LIKEARRAY(d)){
-						for(var i=0,l=d.length;i<l;i++) if(d[i] === v) return true; return false; 
-					} else {
-						for(var k in d) if(d[k] === v) return true; return false; 
-					}
+			"keyOf":function(data,value){
+				if(CORE.TYPEOF.LIKEARRAY(data) === true){
+					for(var i=0,l=data.length;i<l;i++) if(data[i] === value) return i;
+				} else if(typeof data === "object"){
+					for(var key in data) if(data[key] === value) return key;
+				} else if(typeof data === "string"){
+					return data.indexOf(value);
 				}
 			},
+			"all":DATA_ALL_PROC,
+			"any":DATA_ANY_PROC,
 			"needOf":CORE.PIPE(function(d,v){
 				!N.has(d,v) && N.pushOf.BOOST(d,v); return d;
 			},2),
@@ -1084,10 +1235,28 @@
 				for(var i=ev.length-1;i>-1;i--) if(f.call(ev[i],ev[i],i) === false) return false; 
 				return ev; 
 			},2),
+			"from":CORE.PIPE(function(v,f){
+				if(typeof v === "object" && typeof f === "string"){
+					if( f.indexOf(".") > 0 ){
+						var sf=f.split(".");
+						var se=v;
+						for(var i=0,l=sf.length;i<l;i++)if(se[sf[i]])se=se[sf[i]];
+						return se;
+					}
+					return v[f];
+				} else if(typeof v === "object" && typeof f === "number"){
+					return v[f];
+				}
+			},2),
 			// 각각의 값을 배열로 다시 구해오기
 			"map":CORE.PIPE(function(v,f){ 
-				var rv=[],ev=CORE.AS_ARRAY(v); 
-				for(var i=0,l=ev.length;i<l;i++) rv.push(f.call(ev[i],ev[i],i)); return rv; 
+				var rv=[],ev=CORE.AS_ARRAY(v);
+				if(typeof f == "function"){
+					for(var i=0,l=ev.length;i<l;i++) rv.push(f.call(ev[i],ev[i],i)); 
+				} else if(typeof f === "string" || typeof f === "number"){
+					for(var i=0,l=ev.length;i<l;i++) rv.push(N.from.BOOST(ev[i],f)); 
+				}
+				return rv; 
 			},2),
 			// define이 끝날때까지 계속 map을 생성함
 			"defineMap":CORE.PIPE(function(v,f,infinity){ 
@@ -1119,17 +1288,7 @@
 				d=(typeof d=="object"?d:{});v=CORE.AS_ARRAY(v); for(var i=0,l=v.length;i<l;i++)f(d,v[i],i);return d;
 			},
 			"filter":CORE.PIPE(DATA_FILTER_PROC,2),
-			"add":CORE.PIPE(function(data,v){
-				var data = CORE.AS_ARRAY(data), included=false;
-				for(var i=0,l=data.length;i<l;i++){
-					if(data[i]===v){
-						included = true;
-						break;
-					}
-				}
-				if(included===false) data.push(v);
-				return data;
-			},2),
+			
 			"insert":CORE.PIPE(function(data,v,a){
 				data = CORE.AS_ARRAY(data);
 				Array.prototype.splice.call(data,typeof a === "number"?a:0,0,v);	
@@ -1211,6 +1370,63 @@
 				}
 				return result;
 			},1),
+			"keys":CORE.PIPE(function(d){
+				return Object.keys(d);
+			},1),
+			//nd.track(["aass","bddw","casef"],function(s){ return s[0]; });  =>  {a: ["aass"], b: ["bddw"], c: ["casef"]}
+			//nd.track([{key:"a"},{key:"b"},{key:"c"}],"key");  =>  {a: [{key: "a"}], b: [{key: "b"}], c: [{key: "c"}]}
+			"track":CORE.PIPE(function(d,f){
+				var r={};
+				if(typeof f === "function"){
+					for(var i=0,l=d.length;i<l;i++){
+						var k = f(d[i]);
+						if(typeof k === "string" || typeof k === "number"){
+							r[k]=r[k]||[];
+							r[k].push(d[i]);
+						}
+					}
+				}
+				if(typeof f === "string" || typeof f === "number"){
+					for(var i=0,l=d.length;i<l;i++){
+						if(typeof d[i] === "object" && d[i].hasOwnProperty(f)){
+							var k = d[i][f];
+							if(!r[k])r[k]=[];
+							r[k].push(d[i]);
+						} 
+					}
+				}
+				return r;
+			},2),
+			//object to array map
+			"trackMap":CORE.PIPE(function(d,f){
+				var r = [];
+				if(typeof f === "function"){
+					for(var k in d)r.push(f(d[k],k));
+				} else {
+					for(var k in d)r.push(d[k]);
+				}
+				return r;
+			},2),
+			//custom ordinal enum
+			"forEach":CORE.PIPE(function(a,d,f){
+				var ks = CORE.AS_ARRAY(a);
+				for(var i=0,l=ks.length;i<l;i++){
+					if(f(d[ks[i]],ks[i])==false) return false;
+				}
+				return d;
+			},3),
+			"forMap":CORE.PIPE(function(a,d,f){
+				var ks = CORE.AS_ARRAY(a);
+				
+				var rv=[],ev=CORE.AS_ARRAY(d);
+				
+				if(typeof f == "function"){
+					for(var i=0,l=ks.length;i<l;i++) rv.push(f.call(d[ks[i]],d[ks[i]],ks[i]));
+				} else if(typeof f === "string" || typeof f === "number"){
+					for(var i=0,l=ks.length;i<l;i++) rv.push(N.from.BOOST(d[ks[i]],ks[i])); 
+				}
+				return rv;
+			},3),
 			"dataEqual":function(data1,data2){
 				var firstType  = typeof data1;
 				if(firstType === typeof data2) {
@@ -1310,9 +1526,7 @@
 			},
 			"propLength":function(data){ var l = 0; if(typeof data === "object" || typeof data === "function") for(var key in data) l++; return l; },
 			//새로운 객체를 만들어 복사
-			"clone"  : function(target,d) { 
-				return CORE.CLONE(target,d);
-			},
+			"clone"  : CORE.CLONE,
 			"diffKeys":function(a,b){
 				if(typeof a === "object" && typeof b === "object"){
 					return N.filter(N.flatten(N.propKey(a),N.propKey(b),N.unique),function(key){
@@ -1386,7 +1600,7 @@
 			"cron":function(pattern){
 				return new CORE.NDCRON(pattern);
 			},
-			"dateExp":function(dv,format,pad){
+			"parseDate":function(dv,format,pad){
 				if(CORE.TYPEOF.LIKEARRAY(dv)) dv = dv.join(' ');
 			
 				var dt = /(\d\d\d\d|)[^\d]?(\d\d|\d|).?(\d\d|\d|)[^\d]?(\d\d|\d|)[^\d]?(\d\d|\d|)[^\d]?(\d\d|\d|)/.exec(dv);
@@ -1408,12 +1622,12 @@
 					return r.format(format);
 					return r;
 			},
-			"timestampExp":function(exp){
+			"timeStamp":function(exp){
 				if( arguments.length === 0){
 					return (+new Date());
 				}
 				if( typeof exp === "string") {
-					exp = N.dateExp(exp);
+					exp = N.parseDate(exp);
 				}
 				if( typeof exp === "number") {
 					return exp;
@@ -1426,7 +1640,27 @@
 				}
 				return 0;
 			},
-			"timescaleExp":function(exp){
+			"parseTimeScale":function(scale,toObject){
+				var totalScale = ~~scale;
+				var r = {string:[]};
+				
+				nd.each(CORE.KNOWN.TIMESCALE,function(prop){
+					var size=~~(totalScale/prop.scale);
+					if(size > 0){
+						r[prop.key]=size;
+						r.string.push(size+prop.key);
+						totalScale -= (size * prop.scale);
+					}
+				});
+				
+				if(!r.string.length){
+					r.string = ["0ms"];
+					r.ms = 0;
+				}
+				
+				return toObject == true ? r : r.string.join(" ");
+			},
+			"timeScale":function(exp){
 				var scale = 0;
 				if(typeof exp === "number") {
 					return exp;
@@ -1930,8 +2164,11 @@
 				}
 				return N.toNumber(source);
 			},
+			"cursor":function(v,getter,gears){
+				return new CORE.NDCURSOR(v,getter,gears);
+			},
 			"domain":function(domain,exchange){
-				return new CORE.NDDOMAIN(command,exchange);
+				return new CORE.NDDOMAIN(domain,exchange);
 			},
 			"zone":function(command,step){
 				return new CORE.NDZONE(command,step);
@@ -2441,18 +2678,16 @@
 			},
 			//배열기반 키벨류 관리
 			hasDataProp:function(keyName){
-				return N.isModule(this.Source[keyName],"Array");
+				return (this.Source[keyName] instanceof N.Array);
 			},
-			touchDataProp:function(keyName,autoReplace){
+			touchDataProp:function(keyName){
 				if(typeof keyName === "string"){
 					//arrayModule
-					return this.hasDataProp(keyName) ? this.Source[keyName] :
-					(autoReplace === false) ? [this.Source[keyName]] : 
-							this.Source[keyName] = [this.Source[keyName]];
+					if(!this.hasDataProp(keyName)) this.Source[keyName] = new N.Array(this.Source[keyName]);
+					return this.Source[keyName];
 				} else {
 					console.warn('Manage::touchDataProp parameter is must be string',keyName);
 				}
-				return [];
 			},
 			defineDataProp:function(){
 				var args = N.argumentsFlatten(arguments);
@@ -2461,14 +2696,12 @@
 			},
 			dataProp:function(k,filter){
 				var data = this.touchDataProp(k,false);
-				if(typeof filter === "function")
-					return data.map(filter);
-				return data;
+				return (typeof filter === "function") ? data.map(filter) : data;
 			},
 			pushDataProp:function(k,v,unique){
-				var data = this.touchDataProp(k);
 				if(arguments.length < 2) return console.warn("pushDataProp is must be length gt 1");
-				data[unique?"add":"push"](v);
+				var trackSource = this.touchDataProp(k);
+				unique == true ? N.addOf.BOOST(trackSource,v) : N.pushOf.BOOST(trackSource,v);
 				return this
 			},
 			extend:function(o){ N.extend(this.Source,o); return this; },
