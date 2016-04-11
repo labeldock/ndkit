@@ -10,9 +10,12 @@
     "dhtml"
   ],
   "license": "MIT",
+  "scripts": [
+    "dist/nd.js",
+	"dist/nd.webkit.js"
+  ],
   "main": [
-	  "dist/nd.js",
-	  "dist/nd.webkit.js"
+	  "dist/nd.js"
   ],
   "ignore": [
     "**/.*",
