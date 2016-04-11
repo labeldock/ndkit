@@ -1005,7 +1005,6 @@ nd && nd.PLUGIN(function(N,CORE){
         }
 	});
 
-
 	N.SINGLETON("FINDKIT",{
 		//루트노드 없이 검색
 		"findLite":function(find){
@@ -1452,7 +1451,13 @@ nd && nd.PLUGIN(function(N,CORE){
 				temphtml += '</template>';
 			return N.parseHTML(temphtml)[0];
 		},
-		"makeImg":function(src,width){
+		"readURL":CORE.PIPE(function(e){
+			if(typeof e === "object"){
+				if(typeof e.toDataURL === "function") return e.toDataURL();
+			}
+			throw new Error("Can't not read")
+		},1),
+		"makeImg":CORE.PIPE(function(src,width){
 			if(typeof src === 'string') {
 				var param = {src:src};
 				if(width) param.style =  'width:'+ N.toPx(width)+';'
@@ -1469,8 +1474,8 @@ nd && nd.PLUGIN(function(N,CORE){
 					return result;
 				}
 			}
-		},
-		"makeCanvas":function(width,height,render){
+		},1),
+		"makeCanvas":CORE.PIPE(function(width,height,render){
 			var canvas = document.createElement("canvas");
 			canvas.setAttribute("width",width?width:"auto");
 			canvas.setAttribute("height",height?height:"auto");
@@ -1497,10 +1502,9 @@ nd && nd.PLUGIN(function(N,CORE){
 					}
 				} 
 			}
-			if( typeof render === "string") srcToCanvasRender(render);
-			else N.CALL(render,canvas,canvas.getContext("2d"));
+			if( typeof render === "string") srcToCanvasRender(render); else N.CALL(render,canvas,canvas.getContext("2d"));
 			return canvas;
-		},
+		},3),
 		//노드 배열을 복사함
 		"cloneNodes":function(node){
 			return N.map(N.findLite(node),function(findNode){ return findNode.cloneNode(findNode,true); });
@@ -1754,7 +1758,7 @@ nd && nd.PLUGIN(function(N,CORE){
 		"index":function(el){
 			var node = N.findLite(el)[0];
 			var parent = N.findParent(node);
-			if(parent) return N.dataIndex(parent.children,node);
+			if(parent) return N.index(parent.children,node);
 		},
 		"append":function(parentIn,childs,needIndex){
 			var parent = N.findLite(parentIn)[0];
@@ -3360,7 +3364,6 @@ nd && nd.PLUGIN(function(N,CORE){
 		listen:function(triggerName,proc){
 			if(typeof proc !== "function") return false;
 			this.ManageModuleEvents.pushDataProp(triggerName,proc,true);
-			console.log("add listen",triggerName,proc,this);
 		},
 		hasListen:function(triggerName){
 			if(arguments.length === 0) this.ManageModuleEvents.hasProp();
@@ -3394,14 +3397,13 @@ nd && nd.PLUGIN(function(N,CORE){
 		addEventRegister:function(eventName,withAroundCallback){
 			var _self = this;
 			if(typeof eventName === "string"){
-				var upperCaseName = eventName[0].toUpperCase() + eventName.substr(1);
-				var onCaseName = "on"+upperCaseName;
+				var onCaseName = "on"+eventName;
 				
 				this.ManageModuleEvents.touchDataProp(eventName);
 				
 				if(withAroundCallback === true){
-					var willUpperCase = "will"+upperCaseName;
-					var didUpperCase  = "did"+upperCaseName; 
+					var willUpperCase = "will"+eventName;
+					var didUpperCase  = "did"+eventName; 
 					this.ManageModule[willUpperCase] = function(proc){
 						if(typeof proc !== "function") return console.error("missing method from",willUpperCase,proc);
 						_self.listenBefore(eventName,proc);
@@ -3422,34 +3424,109 @@ nd && nd.PLUGIN(function(N,CORE){
 					}
 				});
 			}
+		},
+		resetEvent:function(){
+			//{eventName:[handers...]}
+			this.ManageModuleEvents = new N.HashSource();
+			//{eventName:{aroundName:[handlers..]}}
+			this.ManageModuleAroundEvents = new N.HashSource();
 		}
 	},function(module){
 		if(!N.isModule(module)) console.error("EventListener:: manage object is must be nody module");
 		this.ManageModule = module;
-		//{eventName:[handers...]}
-		this.ManageModuleEvents = new N.HashSource();
-		//{eventName:{aroundName:[handlers..]}}
-		this.ManageModuleAroundEvents = new N.HashSource();
+		this.resetEvent();
 		var _self = this;
 	});
 	
-	
-	N.MODULE("Gesture",function(gestureView){
-		this.view = N.findLite(gestureView)[0];
+	N.MODULE("Gesture",{
+		dragAction:function(param){
+			
+			var action = N.dummy({
+				resolve:param.resolve,
+				start:param.start,
+				move:param.move,
+				end:param.end,
+				cancle:function(e,attr,status){
+					param.cancle && param.cancle(e,attr,"cancle",status);
+					action.resolveStatus = false;
+				},
+				gesture:this,
+				resolveStatus:false
+			});
+			
+			this.ondrag(function(event,attr,realStatus){
+				if(action.resolveStatus == false && realStatus == "start"){
+					if((action.resolve === true) || (typeof action.resolve === "undefined")) {
+						action.resolveStatus = true;
+					} else if(typeof action.resolve === "function") {
+						action.resolveStatus = action.resolve(event,attr,"resolve") == true ? true : false;
+					}
+				}
+				if(action.resolveStatus == true) {
+					switch(realStatus){
+						case "start":
+							if(action.start && action.start(event,attr,realStatus) == false) action.cancle(event,attr,realStatus);
+							if(action.move  && action.move(event,attr,"move") == false) action.cancle(event,attr,"move");
+							break;
+						case "move":
+							if(action.move && action.move(event,attr,"move") == false) action.cancle(event,attr,"move");
+							break;
+						case "end":
+							if(action.end  && action.end(event,attr,realStatus) == false) action.cancle(event,attr,realStatus);
+							action.resolveStatus = false;
+							break;
+					}
+				}
+			});
+			
+			this.GestureActions.push(action);
+			return action;
+		},		
+		resetEvent:function(){
+			this.EventListener.resetEvent();
+		},
+		_gestureReset:function(){
+			this._firstPageX = this._lastPageX = undefined;
+			this._firstPageY = this._lastPageY = undefined;
+			this._firstPinchValue = undefined;
+			this._lastGesture = undefined;
+			this._lastGestureEvent = undefined;
+		},
+		stopGesture:function(){
+			this._gestureReset();
+		},
+		inheritGesture:function(gesture){
+			if(gesture instanceof N.Gesture){
+				var e = gesture._lastGestureEvent;
+				
+				//stop all
+				this.stopGesture();
+				gesture.stopGesture();
+				
+				//start inherit event
+				this._gestureStartHandler(e);
+			}
+		}
+	},function(gestureView,layerView){
+		this.view      = N.findLite(gestureView)[0];
+		this.layerView = N.findLite(layerView)[0]
 		
 		if(!this.view) return console.error("Gesture::no find gestrue view");
 		
 		this.GestureListener = {};
+		this.GestureActions  = [];
 		this._firstPinchValue;
 		this._firstPageX;
 		this._firstPageY;
 		this._lastPageX;
 		this._lastPageY;
+		this._lastGesture;
+		this._lastGestureEvent;
 		this.stopPropagation = true;
 		this.preventDefault  = true;
 		//touch event
 		var EventListener = this.EventListener = new N.EventListener(this);
-		EventListener.addEventRegister(["gesture","drag","throw","pinch"]);
+		EventListener.addEventRegister(["drag","pinch"]);
 		
 		var _self = this;
 		var getPinchDistance = function(fx1,fy1,fx2,fy2){
@@ -3459,28 +3536,36 @@ nd && nd.PLUGIN(function(N,CORE){
 			);
 		};
 		
-		
-		this._gestureReset = function(e){
-			_self._firstPageX = _self._lastPageX = undefined;
-			_self._firstPageY = _self._lastPageY = undefined;
-			_self._firstPinchValue = undefined;
-			_self._lastGesture = undefined;
-		};
-		
 		this._gestureStartHandler = function(e){
 			if(EventListener.hasListener()){
 				var pageX = _self._firstPageX = _self._lastPageX = e.touches ? e.touches[0].pageX : e.pageX;
 				var pageY = _self._firstPageY = _self._lastPageY = e.touches ? e.touches[0].pageY : e.pageY;
 				
 				_self._lastGesture = {
-					e:e,
 					pageX:pageX,
 					pageY:pageY,
 					relativeX:0,
 					relativeY:0,
+					screenX:e.screenX,
+					screenY:e.screenY,
 					moveX:0,
-					moveY:0
+					moveY:0,
+					offsetX:e.offsetX,
+					offsetY:e.offsetY
 				};
+				
+				//layer mouse position
+				if(_self.layerView){
+					var layerOffset = N.NODEKIT.mousePosition(e,_self.layerView);
+					_self._lastGesture.layerX = layerOffset.x;
+					_self._lastGesture.layerY = layerOffset.y;
+				} else {
+					_self._lastGesture.layerX = _self._lastGesture.offsetX;
+					_self._lastGesture.layerY = _self._lastGesture.offsetY;
+				}
+				
+				_self._lastGestureEvent = e;
+				
 				
 				if (EventListener.hasListener("pinch") && e.touches && e.touches.length === 2) {
 					e.preventDefault();
@@ -3491,9 +3576,10 @@ nd && nd.PLUGIN(function(N,CORE){
 						 e.touches[1].pageY
 					);
 					_self._lastGesture.pinch = 1;
-					EventListener.trigger("pinch",_self._lastGesture,"start");
+					EventListener.trigger("pinch",e,_self._lastGesture,"start");
 				}
-				EventListener.trigger("gesture",_self._lastGesture,"start");
+				
+				EventListener.trigger("drag",e,_self._lastGesture,"start");
 				
 				if(_self.stopPropagation===true)e.stopPropagation();
 				if(_self.preventDefault===true) e.preventDefault();
@@ -3506,16 +3592,31 @@ nd && nd.PLUGIN(function(N,CORE){
 				var pageX = e.touches ? e.touches[0].pageX : e.pageX;
 				var pageY = e.touches ? e.touches[0].pageY : e.pageY;
 				
-				_self._lastGesture = {
-					e:e,
-					pageX:pageX,
-					pageY:pageY,
-					relativeX:pageX - _self._firstPageX,
-					relativeY:pageY - _self._firstPageY,
-					moveX:pageX - _self._lastPageX,
-					moveY:pageY - _self._lastPageY
+				// update _lastGesture
+				_self._lastGesture.pageX=pageX;
+				_self._lastGesture.pageY=pageY;
+				_self._lastGesture.relativeX=pageX - _self._firstPageX;
+				_self._lastGesture.relativeY=pageY - _self._firstPageY;
+				_self._lastGesture.screenX=e.screenX;
+				_self._lastGesture.screenY=e.screenY;
+				_self._lastGesture.moveX=pageX - _self._lastPageX;
+				_self._lastGesture.moveY=pageY - _self._lastPageY;
+				_self._lastGesture.offsetX=_self._lastGesture.offsetX + _self._lastGesture.moveX;
+				_self._lastGesture.offsetY=_self._lastGesture.offsetY + _self._lastGesture.moveY;
+				
+				//layer mouse position
+				if(_self.layerView){
+					var layerOffset = N.NODEKIT.mousePosition(e,_self.layerView);
+					_self._lastGesture.layerX = layerOffset.x;
+					_self._lastGesture.layerY = layerOffset.y;
+				} else {
+					_self._lastGesture.layerX = _self._lastGesture.offsetX;
+					_self._lastGesture.layerY = _self._lastGesture.offsetY;
 				}
 				
+				_self._lastGestureEvent = e;
+				
+				// update _lastPage
 				_self._lastPageX = pageX;
 				_self._lastPageY = pageY;
 				
@@ -3528,10 +3629,10 @@ nd && nd.PLUGIN(function(N,CORE){
 						 e.touches[1].pageY
 					);
 					_self._lastGesture.pinch = -((_self._firstPinchValue / pinchDistance) - 1);
-					EventListener.trigger("pinch",_self._lastGesture,"move");
+					EventListener.trigger("pinch",e,_self._lastGesture,"move");
 					
 				}
-				EventListener.trigger("gesture",_self._lastGesture,"move");
+				EventListener.trigger("drag",e,_self._lastGesture,"move");
 				
 				if(_self.stopPropagation===true)e.stopPropagation();
 				if(_self.preventDefault===true) e.preventDefault();
@@ -3542,9 +3643,9 @@ nd && nd.PLUGIN(function(N,CORE){
 			if(EventListener.hasListener() && _self._firstPageX !== undefined){
 				
 				if (EventListener.hasListener("pinch") && (typeof _self._firstPinchValue === "number") && e.touches && e.touches.length === 2) {
-					this.EventListener.trigger("pinch",_self._lastGesture,"end");
+					this.EventListener.trigger("pinch",e,_self._lastGesture,"end");
 				}
-				EventListener.trigger("gesture",_self._lastGesture,"end");
+				EventListener.trigger("drag",e,_self._lastGesture,"end");
 				
 				_self._gestureReset();
 				
@@ -3553,9 +3654,9 @@ nd && nd.PLUGIN(function(N,CORE){
 			}
 		};
 		
-		N.node.punch(this.view,"mousedown",this._gestureStartHandler);
-		N.node.punch(document.body,"mousemove",this._gestureMoveHandler);
-		N.node.punch(document.body,"mouseup",this._gestureEndHandler);		
+		N.node.punch(this.view,"mousedown",_self._gestureStartHandler);
+		N.node.punch(document.body,"mousemove",_self._gestureMoveHandler);
+		N.node.punch(document.body,"mouseup",_self._gestureEndHandler);		
 	});
 	
 	var RoleNodes = {};

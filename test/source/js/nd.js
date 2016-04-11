@@ -11,7 +11,7 @@
 	
 		// Nody version
 		// This is pre release version
-		N.VERSION = "0.0 alpah pre", N.BUILD = "12";
+		N.VERSION = "0.0 alpah pre", N.BUILD = "15";
 		
 		// Core verison
 		N.CORE_VERSION = "3.0", N.CORE_BUILD = "100";
@@ -340,20 +340,36 @@
 		
 		CORE.NDCLASS = function(func,proto){
 			if(proto) func.prototype = proto;
-			func.constructor = func;
+			if(!func.prototype) func.prototype = {};
+			func.prototype.constructor = func;
 			return func;
 		};
 		
+		var DummyInstance = function(){};
+		
+		N.METHOD("dummy",function(func,proto){
+			if(arguments.length == 1){
+				if(typeof func !== "function"){
+					proto = func;
+					func  = DummyInstance;
+				}
+			}
+			var ins = (new func());
+			if(typeof proto === "object") for(var k in proto){ ins[k] = proto[k]; }
+			return ins;
+		});
+		
 		CORE.KNOWN = {
 			TIMESCALE:[
-				{key:"year",scale:31536000000},
-				{key:"month",scale:2678400000},
-				{key:"day",scale:86400000},
-				{key:"hour",scale:3600000},
-				{key:"minute",scale:60000},
-				{key:"second",scale:1000},
-				{key:"ms",scale:1}
-			]
+				{key:"year",alias:"Y",scale:31536000000},
+				{key:"month",alias:"M",scale:2678400000},
+				{key:"day",alias:"D",scale:86400000},
+				{key:"hour",alias:"h",scale:3600000},
+				{key:"minute",alias:"m",scale:60000},
+				{key:"second",alias:"s",scale:1000},
+				{key:"ms",alias:"millisecond",scale:1}
+			],
+			TIMEPERIOD:[["year","Y"],["month","M"],["day","D"],["hour","H","h"],["minute","m"],["second","s"],["ms","millisecond"]]
 		};
 		
 		CORE.TYPEOF  = {
@@ -407,6 +423,11 @@
 					});
 				}
 				return c || {};
+		};
+		
+		CORE.FILTERCALL = function(f,v){
+			if(typeof f === "function") return f.apply(this,Array.prototype.slice.call(arguments,1));
+			return v;
 		};
 		
 		CORE.RECALL = function(f){
@@ -538,6 +559,11 @@
 		
 		//vector based range
 		CORE.NDZONE = CORE.NDCLASS(function(source,step){
+			this.$type= 
+			this.$stuff=
+			this.$step= 
+			this.$cache= undefined;
+			
 			if(source instanceof CORE.NDZONE){
 				this.$type  = source.$type;
 				this.$stuff = source.$stuff;
@@ -545,42 +571,46 @@
 				return;
 			}
 			
-			this.$step     = N.parseFloat(step) || 1;
-			
 			if(CORE.TYPEOF.ARRAY(source)){
 				if(step == false){
-					this.$type  = "arrange";
-					this.$stuff = CORE.CLONE(source);
+					return this.setArrange(CORE.CLONE(source));
 				} else {
-					source = source[0] + "-" + source[source.length-1];
+					return this.setRange(source[0],source[source.length-1],step);
 				}	
 			}
 						
 			var source = (source+"").trim(),range = /^([\-\+\.0-9]+)(\~|\-)([\-\+\.0-9]+)$/.exec(source);
 			
 			if(range){
-				this.$type  = "range";
-				this.$stuff = Array.prototype.slice.call(range,1);
-				for(var i=0,l=this.$stuff.length;i<l;i++) this.$stuff[i] = this.$stuff[i];
-				//if(this.$stuff[0] > this.$stuff[2]) this.$stuff = this.$stuff.reverse();
-				return;
+				var sourceData = Array.prototype.slice.call(range,1);
+				return this.setRange(sourceData[0],sourceData[2],step);
 			}
 			
-			if(source.indexOf("||") > -1){
-				this.$type  = "arrange";
-				this.$stuff = source.split("||");
-				return;
-			}
-			
-			if(source.indexOf(",") > -1){
-				this.$type  = "arrange";
-				this.$stuff = source.split(",");
-				return;
-			}
-			
-			this.$type  = "arrange";
-			this.$stuff = [source];
+			if(source.indexOf("||") > -1) return this.setArrange(source.split("||"));
+			if(source.indexOf(",") > -1) return this.setArrange(source.split(","));
+			this.setArrange([source]);
 		},{
+			setStep:function(step){
+				var step=CORE.NUMBER.FLOAT(step);
+				this.$step=step==0?1:step;
+			},
+			setRange:function(p1,p2,step){
+				this.$type  = "range";
+				
+				p1 = CORE.NUMBER.FLOAT(p1);
+				p2 = CORE.NUMBER.FLOAT(p2);
+				
+				if(p1 > p2) this.$stuff=[p2,p1]; else this.$stuff=[p1,p2];
+				
+				if(!this.$step) this.setStep(step); else if(step) this.setStep(step);
+			},
+			setArrange:function(data){
+				this.$type  = "arrange";
+				this.$stuff = data;
+			},
+			step:function(){
+				return this.$step;
+			},
 			clone:function(){
 				return new CORE.NDZONE(this);
 			},
@@ -588,60 +618,24 @@
 				if(this.$cache) return this.$cache;
 				switch(this.$type){
 					case "range":
-						return this.$cache = nd.range(N.parseFloat(this.$stuff[2]),N.parseFloat(this.$stuff[0]),this.$step,true);
+						return this.$cache = nd.range(N.parseFloat(this.$stuff[1]),N.parseFloat(this.$stuff[0]),this.$step,true);
 					case "arrange":
 						return this.$cache = (requireNumber==true ?  N.map(this.$stuff[0].split(this.$stuff[1]),function(n){return N.parseFloat(n)}) : this.$stuff[0].split(this.$stuff[1]));
 				}
 			},
-			attract:function(){
-				return N.attract(this.range());
-			},
-			around:function(v){
-				var range = this.range();
-				
-				if(range[0] > v || range.length === 1) { return range[0]; }
-				if(range[range.length-1] < v) { return range[range.length-1]; }
-				
-				var s,si;
-				
-				for(var i=0,l=range.length;i<l;i++){
-					if(range[i] > v) break;
-					s=range[i],si=i;
-				}
-				
-				if(!s) return range[range.length-1];
-				var sa = range[si+1];
-				return typeof sa == "undefined" ? s : (v - s) < (sa - v) ? s : sa;
-			},
-			length:function(){
-				if(this.$type==="range"){
-					// TODO:not full tested
-					return Math.floor((N.parseFloat(this.$stuff[2]) - (N.parseFloat(this.$stuff[0]) - this.$step)) / this.$step);
-				} else {
-					return this.range().length;
-				}
-			},
-			size:function(){
-				if(this.$type==="range"){
-					return N.parseFloat(this.$stuff[2]) - N.parseFloat(this.$stuff[0]);
-				} else {
-					return this.range().length;
-				}
-			},
-			step:function(){
-				return this.$step;
-			},
 			maximum:function(v){
-				//set
+				//range
 				if(this.$type==="range") {
+					//set
 					if(typeof v==="number"){
 						delete this.$cache;
-						return this.$stuff[2] = v, this;
+						return this.setRange(this.$stuff[0],v), this;
 					} else {
-						var max = N.parseFloat(this.$stuff[2]);
-						return max;
+						//get
+						return this.$stuff[1];
 					}
 				}
+				//get
 				return N.last(this.range(typeof v==="boolean"?v:true));
 			},
 			minimum:function(v){
@@ -649,12 +643,59 @@
 				if(this.$type==="range"){
 					if(typeof v==="number"){
 						delete this.$cache;
-						return this.$stuff[0] = v, this;
+						return this.setRange(v,this.$stuff[1]), this;
 					} else {
 						return N.parseFloat(this.$stuff[0]);
 					}
 				}
 				return N.first(this.range(typeof v==="boolean"?v:true));
+			},
+			attract:function(){
+				return N.attract(this.range());
+			},
+			around:function(v){
+				if(this.$type === "range"){
+					var v   = CORE.NUMBER.FLOAT(v);
+					var min = this.minimum();
+					var max = this.maximum();
+					
+					if(v >= max) return max;
+					if(v <= min) return min;
+					
+					return (Math.round((v - min) / this.$step) * this.$step) + min;
+				} else {
+					//arrange
+					var range = this.range();
+				
+					if(range[0] > v || range.length === 1) { return range[0]; }
+					if(range[range.length-1] < v) { return range[range.length-1]; }
+				
+					var s,si;
+				
+					for(var i=0,l=range.length;i<l;i++){
+						if(range[i] > v) break;
+						s=range[i],si=i;
+					}
+				
+					if(!s) return range[range.length-1];
+					var sa = range[si+1];
+					return typeof sa == "undefined" ? s : (v - s) < (sa - v) ? s : sa;
+				}
+			},
+			length:function(){
+				if(this.$type==="range"){
+					// TODO:not full tested
+					return Math.floor((N.parseFloat(this.$stuff[1]) - (N.parseFloat(this.$stuff[0]) - this.$step)) / this.$step);
+				} else {
+					return this.range().length;
+				}
+			},
+			size:function(){
+				if(this.$type==="range"){
+					return N.parseFloat(this.$stuff[1]) - N.parseFloat(this.$stuff[0]);
+				} else {
+					return this.range().length;
+				}
 			},
 			valueAt:function(i,iproc){
 				var i=(iproc || CORE.INDEX.LIMIT)(i,this.length());
@@ -669,8 +710,9 @@
 			vectorByValue:function(v){
 				return (v - this.minimum()) / this.size();
 			},
-			valueByVector:function(v){
-				return this.minimum() + this.size() * v;
+			valueByVector:function(v,around){
+				var calc = this.minimum() + this.size() * v;
+				return around == false ? calc : this.around(calc);
 			},
 			isInner:function(z){
 				if(!(z instanceof CORE.NDZONE)) z = new CORE.NDZONE(z);
@@ -758,22 +800,74 @@
 			}
 		});
 		
-		CORE.NDDOMAIN = CORE.NDCLASS(function(domain,exchange){
+		CORE.NDCURSOR2 = CORE.NDCLASS(function(pos,size,domain){
+			this.$domain = domain;
+			this.setPosition(pos);
+			this.setSize(pos);
+		},{
+			setPosition:function(v){
+				var fv = CORE.FILTERCALL(this.$fixedDomainPosition,CORE.NUMBER.FLOAT(v));
+				var $d = this.$domain;
+				this.$position = CORE.FILTERCALL(function(v){
+					if($d) {
+						var min = $d.$domain.minimum();
+						var max = $d.$domain.maximum();
+						if(v < min) return min;
+						if(v > max) return max;
+					}
+					return v;
+				},fv);
+			},
+			setSize:function(v){
+				var fv = CORE.FILTERCALL(this.$fixedDomainSize,CORE.NUMBER.FLOAT(v));
+				var $d = this.$domain;
+				this.$size = CORE.FILTERCALL(function(v){
+					if(v < 0) return 0;
+					if($d) {
+						var size = $d.$domain.size();
+						if(v > size) return size;
+					}
+					return v;
+				},fv);
+			},
+			setPositionByRange:function(v){
+				this.setPosition(this.$domain.$domain.valueByVector(this.$domain.$range.vectorByValue(v)));
+			},
+			getPosition:function(){
+				return this.$position;
+			},
+			getRangePosition:function(){
+				var domainVector = this.$domain.$domain.vectorByValue(this.$position);
+				return this.$domain.$range.valueByVector(domainVector);
+			}
+			//rangePosition:function(){
+			//	return [
+			//		this.$domain.$range.valueByVector()
+			//	]
+			//}
+		});
+		
+		
+		CORE.NDDOMAIN = CORE.NDCLASS(function(domain,range){
 			this.$cursors = [];
 			this.setDomain(domain);
-			this.setExchange(exchange);
+			this.setRange(range);
 		},{
 			setDomain:function(r){ this.$domain = new CORE.NDZONE(r); },
-			setExchange:function(r){ this.$exchange = new CORE.NDZONE(r); },
+			setRange:function(r){ this.$range = new CORE.NDZONE(r); },
 			getDomain:function(){ return this.$domain; },
-			getExchange:function(){ return this.$exchange; },
-			scale:function(){ return this.$exchange.size() / this.$domain.size(); },
+			getRange:function(){ return this.$range; },
+			scale:function(){ return this.$range.size() / this.$domain.size(); },
+			cursor:function(domainPos,domainSize){
+				var newCursor = new CORE.NDCURSOR2(domainPos,domainSize,this);
+				return newCursor;
+			},
 			newCursor:function(pos){
 				var $this = this;
 				
 				var newCursor = new CORE.NDCURSOR(pos,function(value,i){
 					var vector = $this.$domain.vectorByValue(value);
-					var result = $this.$exchange.valueByVector(vector);
+					var result = $this.$range.valueByVector(vector);
 					return result;
 				});
 				
@@ -806,6 +900,9 @@
 			f.BOOST=func,
 			f.__NativeMethodOver__=(over || 1),f;
 		};
+		
+		N.METHOD("this",CORE.PIPE(function(v,f){ return typeof f === "function" ? f(v) : f; },2));
+		
 
 		//trycatch high perfomance
 		CORE.TRY_CATCH = function(t,c,s){try{return t.call(s);}catch(e){if(typeof c === 'function') return c.call(s,e);}};
@@ -1057,7 +1154,30 @@
 		});
 		
 		N.TYPE.EACH_TO_METHOD();
-	
+		
+		var DATA_CLEAR_PROC = function(d){
+			if(typeof d == "object"){
+				if(CORE.TYPEOF.LIKEARRAY(d)){
+					Array.prototype.splice.call(d,0,d.length);
+				} else {
+					for(var k in d){ delete d[k]; }
+				}
+				return d;
+			}
+			return [];
+		};
+		
+		var DATA_PUSHOF_PROC = function(d,v,k){
+			if(typeof d == "object"){
+				if(CORE.TYPEOF.LIKEARRAY(d)){
+					d.push(v);
+				} else {
+					d[k || "value"] = v;
+				}
+			}
+			return d;
+		};
+		
 		var DATA_FILTER_PROC = function(inData,filterMethod){
 			var data = CORE.AS_ARRAY(inData);
 			filterMethod = filterMethod || function(a){ return typeof a === "undefined" ? false : true; };
@@ -1067,6 +1187,12 @@
 				return result;
 			}
 			return [];
+		};
+		
+		var DATA_FILTEROF_PROC = function(inData,filterMethod){
+			var inData=CORE.AS_ARRAY(inData),samp=CORE.CLONE(inData),fm=(typeof filterMethod === "function")?filterMethod:function(a){return a===filterMethod?false:true;},inData=DATA_CLEAR_PROC(inData);
+			CORE.ENUM.EACH(samp,function(v){ if(fm(v) == true) inData.push(v); })
+			return inData;
 		};
 		
 		var DATA_ANY_PROC = function(inData,filterMethod){
@@ -1104,19 +1230,8 @@
 			"toObject":CORE.PIPE(function(ob,es,kv){
 				return CORE.AS_OBJECT(ob,es,kv);
 			},1),
-			"pushOf":CORE.PIPE(function(d,v,k){
-				if(typeof d == "object"){
-					if(CORE.TYPEOF.LIKEARRAY(d)){
-						d.push(v);
-					} else {
-						d[k || "value"] = v;
-					}
-				}
-				return d;
-			},2),
-			"push":CORE.PIPE(function(d,v,k){
-				return N.pushOf.BOOST(CORE.CLONE(d),v,k);
-			},2),
+			"pushOf":CORE.PIPE(DATA_PUSHOF_PROC,2),
+			"push":CORE.PIPE(function(d,v,k){ return DATA_PUSHOF_PROC(CORE.CLONE(d),v,k); },2),
 			"has" :function(d,v){ 
 				if(typeof d === "object"){
 					if(CORE.TYPEOF.LIKEARRAY(d)){
@@ -1132,6 +1247,9 @@
 			"add":CORE.PIPE(function(data,v,k){
 				return N.has(data,v) ? data : N.push.BOOST(data,v,k);
 			},2),
+			"clear":CORE.PIPE(DATA_CLEAR_PROC,1),
+			"filterOf":CORE.PIPE(DATA_FILTEROF_PROC,2),
+			"filter":CORE.PIPE(function(d,f){ return DATA_FILTEROF_PROC(CORE.CLONE(d),f); },2),
 			"count":function(d){
 				if(typeof d === "object") return d instanceof Array ? d.length : Object.keys(d).length;
 				if(typeof d === "string") return d.length;
@@ -1183,6 +1301,92 @@
 			},
 			"all":DATA_ALL_PROC,
 			"any":DATA_ANY_PROC,
+			"where":CORE.PIPE(function(c,d){
+				var r = [];
+				if(typeof d === "object") for(var i=0,l=c.length;i<l;i++){
+					if(typeof c[i] === "object"){
+						var a = true;
+						for(var k in d){
+							if(c[i].hasOwnProperty(k)){
+								if(c[i][k] !== d[k]){
+									a = false;
+									break;
+								}
+							} else {
+								a = false;
+								break;
+							}
+						}
+						if(a === true) r.push(c[i]);
+					}
+				}
+				return r;
+			},2),
+			"findWhere":CORE.PIPE(function(c,d){
+				if(typeof d === "object") for(var i=0,l=c.length;i<l;i++){
+					if(typeof c[i] === "object"){
+						var a = true;
+						for(var k in d){
+							if(c[i].hasOwnProperty(k)){
+								if(c[i][k] !== d[k]){
+									a = false;
+									break;
+								}
+							} else {
+								a = false;
+								break;
+							}
+						}
+						if(a === true) return c[i];
+					}
+				}
+			},2),
+			"removeByKey":function(array,indexes){
+				if(CORE.TYPEOF.LIKEARRAY(array)){
+					var removeCount = 0;
+					N.each(N.unique(indexes,nd.sort,function(a,b){return a<b;}),function(index){
+						if(typeof index === "number") array.splice(index+(removeCount--),1);
+					});
+				}
+				return array;
+			},
+			"removeByValue":function(array,target){
+				if(CORE.TYPEOF.LIKEARRAY(array)){
+					var selectIndex = -1;
+					var removeIndexes = [];
+					for(var i=0,l=array.length;i<l;i++) if(array[i] === target) removeIndexes.push(i);
+					if(removeIndexes.length) N.removeByKey(array,removeIndexes);
+				}
+				return array;
+			},
+			"removeByValues":function(array,targets){
+				if(CORE.TYPEOF.LIKEARRAY(array)){
+					var selectIndex = -1;
+					var removeIndexes = [];
+					for(var i=0,l=array.length;i<l;i++){
+						for(var ti=0,tl=targets.length;ti<tl;ti++){
+							if(array[i] === targets[ti]){
+								removeIndexes.push(i);
+								break;
+							} 
+						}
+					}
+					if(removeIndexes.length) N.removeByKey(array,removeIndexes);
+				}
+				return array;
+			},
+			"removeOf":CORE.PIPE(function(d,t){
+				return N.removeByValue(d,t);
+			},2),
+			"remove":CORE.PIPE(function(d,t){
+				return N.removeOf.BOOST(CORE.CLONE(d),t);
+			},2),
+			"omitOf":CORE.PIPE(function(d,t){
+				return N.removeByValues(d,N.where.BOOST(d,t))
+			},2),
+			"omit":CORE.PIPE(function(d,t){
+				return N.removeByValues(CORE.CLONE(d),N.where.BOOST(d,t));
+			},2),
 			"needOf":CORE.PIPE(function(d,v){
 				!N.has(d,v) && N.pushOf.BOOST(d,v); return d;
 			},2),
@@ -1268,27 +1472,9 @@
 				} 
 				return rv;
 			},2),
-			"removeByKey":function(array,indexes){
-				if(CORE.TYPEOF.LIKEARRAY(array)){
-					var removeCount = 0;
-					N.each(N.unique(indexes).sort(),function(index){
-						if(typeof index === "number") array.splice(index+(removeCount++),1);
-					});
-				}
-			},
-			"removeByValue":function(array,target){
-				if(CORE.TYPEOF.LIKEARRAY(array)){
-					var selectIndex = -1;
-					var removeIndexes = [];
-					for(var i=0,l=array.length;i<l;i++) if(array[i] === target) removeIndexes.push(i);
-					if(removeIndexes.length) N.removeByKey(array,removeIndexes);
-				}
-			},
 			"inject":function(v,f,d){ 
 				d=(typeof d=="object"?d:{});v=CORE.AS_ARRAY(v); for(var i=0,l=v.length;i<l;i++)f(d,v[i],i);return d;
 			},
-			"filter":CORE.PIPE(DATA_FILTER_PROC,2),
-			
 			"insert":CORE.PIPE(function(data,v,a){
 				data = CORE.AS_ARRAY(data);
 				Array.prototype.splice.call(data,typeof a === "number"?a:0,0,v);	
@@ -1485,8 +1671,14 @@
 				}
 				return result;
 			},
-			"dataIndex":function(data,compare){ var v = CORE.AS_ARRAY(data); for(var i in v) if(compare == v[i]) return N.toNumber(i); },
-			"arrayIndex":function(array,compare){ if(CORE.TYPEOF.LIKEARRAY(array))for(var i=0,l=array.length;i<l;i++)if(array[i] === compare)return i; return -1;},
+			"index":function(data,compare){ 
+				var v = CORE.AS_ARRAY(data);
+				if(typeof compare === "function"){
+					for(var i in v) if(compare(v[i],i) == true) return N.toNumber(i);
+				} else {
+					for(var i in v) if(compare == v[i]) return N.toNumber(i);
+				}
+			},
 			// 배열안의 배열을 풀어냅니다.
 			"flatten":CORE.PIPE(function(){ return N.argumentsFlatten(arguments); },1),
 			//값을 플래튼하여 실행함
@@ -1660,12 +1852,25 @@
 				
 				return toObject == true ? r : r.string.join(" ");
 			},
-			"timeScale":function(exp){
+			"timeScale":function(exp,period){
 				var scale = 0;
 				if(typeof exp === "number") {
 					return exp;
 				}
 				if(typeof exp === "string") {
+					if(typeof period === "string"){
+						
+						var periodIndex = N.index(CORE.KNOWN.TIMEPERIOD,function(c){ return N.has(c,period); });
+						
+						if(typeof periodIndex === "number"){
+							var periodValues = [];
+							exp.replace(/\d+/g,function(s){ periodValues.push(~~s); });
+							for(var i=0,d=periodValues,l=d.length;i<l;i++) d[i] = d[i] + CORE.KNOWN.TIMEPERIOD[i+periodIndex][0];
+							exp = periodValues.join(" ");
+						}
+					}
+					
+					
 					// 
 					exp = exp.replace(/\d+(Y|year)/,function(t){
 						t.replace(/\d+/,function(d){ scale += d*31536000000; });
@@ -1679,7 +1884,7 @@
 						t.replace(/\d+/,function(d){ scale += d*86400000; });
 						return "";
 					})
-					exp = exp.replace(/\d+(h|hour)/,function(t){
+					exp = exp.replace(/\d+(H|h|hour)/,function(t){
 						t.replace(/\d+/,function(d){ scale += d*3600000; });
 						return "";
 					})
@@ -2167,8 +2372,8 @@
 			"cursor":function(v,getter,gears){
 				return new CORE.NDCURSOR(v,getter,gears);
 			},
-			"domain":function(domain,exchange){
-				return new CORE.NDDOMAIN(domain,exchange);
+			"domain":function(domain,range){
+				return new CORE.NDDOMAIN(domain,range);
 			},
 			"zone":function(command,step){
 				return new CORE.NDZONE(command,step);
