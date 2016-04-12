@@ -11,7 +11,7 @@
 	
 		// Nody version
 		// This is pre release version
-		N.VERSION = "0.0 alpah pre", N.BUILD = "15";
+		N.VERSION = "0.0.0 alpah pre", N.BUILD = "17";
 		
 		// Core verison
 		N.CORE_VERSION = "3.0", N.CORE_BUILD = "100";
@@ -735,72 +735,7 @@
 			}
 		});
 		
-		CORE.NDCURSOR = CORE.NDCLASS(function(v,getter){
-			//[num...]
-			this.$cursor=[];
-			this.$ranges=[];
-			this.setCursor(v);
-			this.$getter = getter;
-		},{
-			setCursor:function(v){
-				for(var i=0,d=CORE.AS_ARRAY(v),l=d.length;i<l;i++){ 
-					if(typeof d[i] === "undefined"){
-						continue;
-					} else if(d[i] instanceof CORE.NDZONE ){
-						this.$ranges[i] = d[i];
-						this.$cursor[i] = 0;
-					} else {
-						this.$ranges[i] = undefined;
-						this.$cursor[i] = CORE.NUMBER.FLOAT(d[i]); 
-					}					
-				}
-			},
-			getCursor:function(v){
-				return this.$cursor;
-			},
-			getValue:function(){
-				var $ranges=this.$ranges,$getter=this.$getter;
-				
-				return CORE.ENUM.MAP(CORE.CLONE(this.$cursor),function(v,i){
-					var val = $ranges[i] ? $ranges[i].valueAt(v,CORE.INDEX.TURN) : v;
-					return (typeof $getter === "function") ? $getter(val,i) : val;
-				});
-			},
-			getRotate:function(){
-				var ranges = this.$ranges;
-				return CORE.ENUM.INJECT(this.$cursor,function(v,i){
-					var range = ranges[i];
-					if(range) {
-						return Math.floor(v * range.step() / range.size()) - 1;
-					} else {
-						return undefined;
-					}
-				},[]);
-			},
-			forward:function(t){
-				var ranges=this.$ranges,befRotate=this.getRotate(),t=(t||1);
-				
-				for(var i=0,d=this.$cursor,l=d.length;i<l;i++){
-					d[i] = d[i] + (this.$ranges[i] ? this.$ranges[i].step() * t : t);
-				}
-				
-				return this;
-			},
-			reverse:function(t){
-				var ranges=this.$ranges,befRotate=this.getRotate(),t=(t||1);
-				
-				for(var i=0,d=this.$cursor,l=d.length;i<l;i++){
-					d[i] = d[i] - (this.$ranges[i] ? this.$ranges[i].step() * t : t);
-				}
-				
-				return this;
-			},
-			getGears:function(){
-				return this.$gears;
-			}
-		});
-		
-		CORE.NDCURSOR2 = CORE.NDCLASS(function(pos,size,domain){
+		CORE.NDCURSOR = CORE.NDCLASS(function(pos,size,domain){
 			this.$domain = domain;
 			this.setPosition(pos);
 			this.setSize(pos);
@@ -840,11 +775,6 @@
 				var domainVector = this.$domain.$domain.vectorByValue(this.$position);
 				return this.$domain.$range.valueByVector(domainVector);
 			}
-			//rangePosition:function(){
-			//	return [
-			//		this.$domain.$range.valueByVector()
-			//	]
-			//}
 		});
 		
 		
@@ -858,20 +788,8 @@
 			getDomain:function(){ return this.$domain; },
 			getRange:function(){ return this.$range; },
 			scale:function(){ return this.$range.size() / this.$domain.size(); },
-			cursor:function(domainPos,domainSize){
-				var newCursor = new CORE.NDCURSOR2(domainPos,domainSize,this);
-				return newCursor;
-			},
-			newCursor:function(pos){
-				var $this = this;
-				
-				var newCursor = new CORE.NDCURSOR(pos,function(value,i){
-					var vector = $this.$domain.vectorByValue(value);
-					var result = $this.$range.valueByVector(vector);
-					return result;
-				});
-				
-				this.$cursors.push(newCursor);
+			newCursor:function(domainPos,domainSize){
+				var newCursor = new CORE.NDCURSOR(domainPos,domainSize,this);
 				return newCursor;
 			}
 		});
@@ -1196,20 +1114,20 @@
 		};
 		
 		var DATA_ANY_PROC = function(inData,filterMethod){
-			var tr = false,fm=(typeof filterMethod === 'function') ? filterMethod : function(v){ return v === filterMethod; };
-			filterMethod = filterMethod || function(a){ return typeof a === "undefined" ? false : true; };
+			var tr=false,fm=(typeof filterMethod === 'function') ? filterMethod : function(v){ return v === filterMethod; },fv=undefined;
 			DATA_FILTER_PROC(inData,function(v,i){
-				var r = fm(v,i)
+				if(i==0)fv=v;
+				var r = fm(v,i,fv);
 				if(r === true) { tr = true; return false; }
 			});
 			return tr;
 		};
 		
 		var DATA_ALL_PROC = function(inData,filterMethod){
-			var tr = true,fm=(typeof filterMethod === 'function') ? filterMethod : function(v){ return v === filterMethod; };
-			filterMethod = filterMethod || function(a){ return typeof a === "undefined" ? false : true; };
+			var tr = true,fm=(typeof filterMethod === 'function') ? filterMethod : function(v){ return v === filterMethod; },fv=undefined;
 			DATA_FILTER_PROC(inData,function(v,i){
-				var r = fm(v,i);
+				if(i==0)fv=v;
+				var r = fm(v,i,fv);
 				if(r === false) return tr = false;
 			});
 			return tr;
@@ -1393,27 +1311,6 @@
 			"need":CORE.PIPE(function(d,v){
 				return N.needOf.BOOST(CORE.CLONE(d),v);
 			},2),
-			"get":CORE.PIPE(function(d,index){
-				if(typeof d === "object" || typeof d === "string") return d[index];
-				return d;
-			},1),
-			"setOf":CORE.PIPE(function(d,v,k){
-				if(typeof k === "undefined") k = (typeof d == "string" || CORE.TYPEOF.LIKEARRAY(v)) ? 0 : "value";
-				if(typeof d === "object" || typeof d === "string") d[k] = CORE.RECALL(v);
-				return d;
-			},2),
-			"set":CORE.PIPE(function(d,v,k){
-				return N.setOf.BOOST(CORE.CLONE(d),v,k);
-			},2),
-			"range":CORE.PIPE(function(end,start,step,last){
-				var r=[];
-				end=parseFloat(end),end=isNaN(end)?0:end;
-				start=parseFloat(start),start=isNaN(start)?0:start;
-				step=parseFloat(step),step=isNaN(step)||step==0?1:step;
-				if(step <= 0){ return console.warn("range::not support minus step"),r;};
-				if(last==true) for(var i=start,l=end;i<=l;i=i+step) r.push(i); else for(var i=start,l=end;i<l;i=i+step) r.push(i);;
-				return r;
-			},1),
 			//배열의 하나추출
 			"first":CORE.PIPE(function(t,offset){
 				if(typeof offset === "function" && CORE.TYPEOF.LIKEARRAY(t)) for(var i=0,l=t.length;i<l;i++){
@@ -1439,6 +1336,54 @@
 				for(var i=ev.length-1;i>-1;i--) if(f.call(ev[i],ev[i],i) === false) return false; 
 				return ev; 
 			},2),
+			// 각각의 값을 배열로 다시 구해오기
+			"map":CORE.PIPE(function(v,f){ 
+				var rv=[],ev=CORE.AS_ARRAY(v);
+				if(typeof f == "function"){
+					for(var i=0,l=ev.length;i<l;i++) rv.push(f.call(ev[i],ev[i],i)); 
+				} else if(typeof f === "string" || typeof f === "number"){
+					for(var i=0,l=ev.length;i<l;i++) rv.push(N.from.BOOST(ev[i],f)); 
+				}
+				return rv; 
+			},2),
+			//1:길이와 같이 2: 함수호출
+			"times":CORE.PIPE(function(l,f,s){ 
+				l=N.toNumber(l); var r = []; 
+				if(typeof f === 'string') var fs = f, f = function(i){ return N.exp.seed(i)(fs); };
+				for(var i=(typeof s === 'number')?s:0;i<l;i++) r.push(f(i)); 
+				return r; 
+			},2),
+			// define이 끝날때까지 계속 map을 생성함
+			"defineMap":CORE.PIPE(function(v,f,infinity){ 
+				var v=v,rv=(typeof v === "undefined") ? [] : [v],ev=CORE.AS_ARRAY(v),infinity = (typeof infinity === "number") ? infinity : 100000;
+				for(var i=0;i<infinity;i++){
+					v = f.call(v,v,i);
+					if(typeof v === "undefined") break;
+					else rv.push(v);
+				} 
+				return rv;
+			},2),
+			"range":CORE.PIPE(function(end,start,step,last){
+				var r=[];
+				end=parseFloat(end),end=isNaN(end)?0:end;
+				start=parseFloat(start),start=isNaN(start)?0:start;
+				step=parseFloat(step),step=isNaN(step)||step==0?1:step;
+				if(step <= 0){ return console.warn("range::not support minus step"),r;};
+				if(last==true) for(var i=start,l=end;i<=l;i=i+step) r.push(i); else for(var i=start,l=end;i<l;i=i+step) r.push(i);;
+				return r;
+			},1),
+			"get":CORE.PIPE(function(d,index){
+				if(typeof d === "object" || typeof d === "string") return d[index];
+				return d;
+			},1),
+			"setOf":CORE.PIPE(function(d,v,k){
+				if(typeof k === "undefined") k = (typeof d == "string" || CORE.TYPEOF.LIKEARRAY(v)) ? 0 : "value";
+				if(typeof d === "object" || typeof d === "string") d[k] = CORE.RECALL(v);
+				return d;
+			},2),
+			"set":CORE.PIPE(function(d,v,k){
+				return N.setOf.BOOST(CORE.CLONE(d),v,k);
+			},2),
 			"from":CORE.PIPE(function(v,f){
 				if(typeof v === "object" && typeof f === "string"){
 					if( f.indexOf(".") > 0 ){
@@ -1451,26 +1396,6 @@
 				} else if(typeof v === "object" && typeof f === "number"){
 					return v[f];
 				}
-			},2),
-			// 각각의 값을 배열로 다시 구해오기
-			"map":CORE.PIPE(function(v,f){ 
-				var rv=[],ev=CORE.AS_ARRAY(v);
-				if(typeof f == "function"){
-					for(var i=0,l=ev.length;i<l;i++) rv.push(f.call(ev[i],ev[i],i)); 
-				} else if(typeof f === "string" || typeof f === "number"){
-					for(var i=0,l=ev.length;i<l;i++) rv.push(N.from.BOOST(ev[i],f)); 
-				}
-				return rv; 
-			},2),
-			// define이 끝날때까지 계속 map을 생성함
-			"defineMap":CORE.PIPE(function(v,f,infinity){ 
-				var v=v,rv=(typeof v === "undefined") ? [] : [v],ev=CORE.AS_ARRAY(v),infinity = (typeof infinity === "number") ? infinity : 100000;
-				for(var i=0;i<infinity;i++){
-					v = f.call(v,v,i);
-					if(typeof v === "undefined") break;
-					else rv.push(v);
-				} 
-				return rv;
 			},2),
 			"inject":function(v,f,d){ 
 				d=(typeof d=="object"?d:{});v=CORE.AS_ARRAY(v); for(var i=0,l=v.length;i<l;i++)f(d,v[i],i);return d;
@@ -1559,6 +1484,23 @@
 			"keys":CORE.PIPE(function(d){
 				return Object.keys(d);
 			},1),
+			//nd.clearance([{a:2,b:4},{a:3,b:3,j:3}]);  => {a: [2, 3], b: [4, 3], j: [undefined, 3]}
+			"clearance":CORE.PIPE(function(c){
+				var ks=[],r={};
+				for(var k in c){
+					if(typeof c[k] === "object"){
+						for(var i=0,d=Object.keys(c[k]),l=d.length;i<l;i++) ks.push(d[i]);
+					} else {
+						console.warn("nd::clearance not support primitive value",c,c[k]);
+					}
+				}
+				for(var i=0,ks=N.unique.BOOST(ks),l=ks.length;i<l;i++){
+					var kt=ks[i],kd=[];
+					for(var k in c) kd.push(c[k][kt]);
+					r[kt]=kd;
+				}
+				return r;
+			},1),
 			//nd.track(["aass","bddw","casef"],function(s){ return s[0]; });  =>  {a: ["aass"], b: ["bddw"], c: ["casef"]}
 			//nd.track([{key:"a"},{key:"b"},{key:"c"}],"key");  =>  {a: [{key: "a"}], b: [{key: "b"}], c: [{key: "c"}]}
 			"track":CORE.PIPE(function(d,f){
@@ -1595,17 +1537,15 @@
 			},2),
 			//custom ordinal enum
 			"forEach":CORE.PIPE(function(a,d,f){
-				var ks = CORE.AS_ARRAY(a);
+				var ks=CORE.AS_ARRAY(a);
 				for(var i=0,l=ks.length;i<l;i++){
 					if(f(d[ks[i]],ks[i])==false) return false;
 				}
 				return d;
 			},3),
 			"forMap":CORE.PIPE(function(a,d,f){
-				var ks = CORE.AS_ARRAY(a);
-				
+				var ks=CORE.AS_ARRAY(a);
 				var rv=[],ev=CORE.AS_ARRAY(d);
-				
 				if(typeof f == "function"){
 					for(var i=0,l=ks.length;i<l;i++) rv.push(f.call(d[ks[i]],d[ks[i]],ks[i]));
 				} else if(typeof f === "string" || typeof f === "number"){
@@ -1613,6 +1553,18 @@
 				}
 				return rv;
 			},3),
+			"forInject":CORE.PIPE(function(a,d,f,t){
+				var ks=CORE.AS_ARRAY(a);
+				var rv=t||d||{};
+				for(var i=0,l=ks.length;i<l;i++) rv[ks[i]] = f.call(d[ks[i]],d[ks[i]],ks[i]);
+				return rv;
+			},3),
+			"forOnly":CORE.PIPE(function(a,d){
+				var ks=CORE.AS_ARRAY(a);
+				var rv={};
+				for(var i=0,l=ks.length;i<l;i++) rv[ks[i]] = d[ks[i]];
+				return rv;
+			},2),
 			"dataEqual":function(data1,data2){
 				var firstType  = typeof data1;
 				if(firstType === typeof data2) {
@@ -1696,13 +1648,6 @@
 				switch(typeof d){ case "number":return d;case "string":var r=d*1;return isNaN(r)?0:r;break; }
 				return 0;
 			},
-			//1:길이와 같이 2: 함수호출
-			"times":CORE.PIPE(function(l,f,s){ 
-				l=N.toNumber(l); var r = []; 
-				if(typeof f === 'string') var fs = f, f = function(i){ return N.exp.seed(i)(fs); };
-				for(var i=(typeof s === 'number')?s:0;i<l;i++) r.push(f(i)); 
-				return r; 
-			},2),
 			//i 값이 제귀합니다.
 			"indexAsReverse":CORE.INDEX.REVERSE,
 			"indexAsTurn":CORE.INDEX.TURN,
@@ -1729,10 +1674,14 @@
 			},
 			//오브젝트의 key를 each열거함
 			"propEach":CORE.PIPE(function(v,f){
-				if(N.isProp(v)){for(k in v) if(f(v[k],k)===false) break;}; 
-				return v;
+				if(N.isProp(v)){for(k in v) if(f(v[k],k)===false) break;} return v;
 			},2),
-			//
+			"propMap":CORE.PIPE(function(v,f){ 
+				var result = {}; for(var k in v) result[k] = f(v[k],k); return result;
+			},2),
+			"propMapOf":CORE.PIPE(function(v,f){ 
+				for(var k in v) v[k] = f(v[k],k); return v; 
+			},2),
 			"propChange":CORE.PIPE(function(source,original,change){
 				if(N.isProp(source) && typeof original === "string" && typeof change === "string") { 
 					source[change] = source[original]; delete source[original]; 
@@ -1758,11 +1707,6 @@
 				}
 				return result;
 			}),
-			"propMap":CORE.PIPE(function(v,f){ 
-				var result = {}; 
-				if(N.isProp(v)) for(var k in v) result[k] = f(v[k],k); return result; 
-				return result;
-			},2),
 			//오브젝트의 key value값을 Array 맵으로 구한다.
 			"propData" :CORE.PIPE(function(v,f){ var result = []; if(typeof f !== "function") f = function(v){ return v; }; if(typeof v === "object"){ for(var k in v) result.push(f(v[k],k)); return result; } return result;},2),
 			"propKey"  :CORE.PIPE(function(obj,rule,expandKeys){
@@ -1832,11 +1776,11 @@
 				}
 				return 0;
 			},
-			"parseTimeScale":function(scale,toObject){
+			"parseTimeScale":CORE.PIPE(function(scale,toObject){
 				var totalScale = ~~scale;
 				var r = {string:[]};
 				
-				nd.each(CORE.KNOWN.TIMESCALE,function(prop){
+				N.each(CORE.KNOWN.TIMESCALE,function(prop){
 					var size=~~(totalScale/prop.scale);
 					if(size > 0){
 						r[prop.key]=size;
@@ -1851,15 +1795,16 @@
 				}
 				
 				return toObject == true ? r : r.string.join(" ");
-			},
+			},1),
 			"timeScale":function(exp,period){
 				var scale = 0;
-				if(typeof exp === "number") {
-					return exp;
-				}
-				if(typeof exp === "string") {
+				if(typeof exp === "number" && typeof period == "undefined") return exp;
+				
+				
+				if(typeof exp === "string" || typeof exp === "number") {
+					exp += "";
+					
 					if(typeof period === "string"){
-						
 						var periodIndex = N.index(CORE.KNOWN.TIMEPERIOD,function(c){ return N.has(c,period); });
 						
 						if(typeof periodIndex === "number"){
@@ -1869,7 +1814,6 @@
 							exp = periodValues.join(" ");
 						}
 					}
-					
 					
 					// 
 					exp = exp.replace(/\d+(Y|year)/,function(t){
@@ -2456,8 +2400,6 @@
 		});
 		N.ADVKIT.EACH_TO_METHOD();
 	
-	
-	
 		N.METHOD("exp",function(source){
 			var $seed  = this.$seed || 0;
 			var $names = this.$names || [];
@@ -2507,7 +2449,17 @@
 				this.$names = Array.prototype.slice.call(arguments);
 			}
 		});
-	
+		
+		N.METHOD("dataExp",CORE.PIPE(function(data,exp){
+			return N.exp.apply(undefined,[exp].concat(CORE.AS_ARRAY(data)));
+		},2));
+		
+		N.METHOD("propExp",CORE.PIPE(function(data,exp){
+			var ks=[],da=[];
+			N.propEach.BOOST(data,function(d,k){ ks.push(k),da.push(d); });
+			return nd.exp.names.apply(undefined,ks).call.apply(undefined,[exp].concat(da));
+		},2));
+		
 		N.METHOD("expn",function(source){
 			if(arguments.length === 1){
 				return N.toNumber(N.exp.call(undefined,"\\("+source+")"));
