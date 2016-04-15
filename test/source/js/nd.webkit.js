@@ -6,7 +6,7 @@
 
 nd && nd.PLUGIN(function(N,CORE){
 	
-	N.VERSION += ", webkit(0.0 alpah pre)", N.BUILD += ", webkit(2)";
+	N.VERSION += ", webkit 0.0 alpah pre", N.BUILD += ", webkit(4)";
 	
 	// addEventListener polyfill by https://gist.github.com/jonathantneal/3748027
 	!window.addEventListener && (function (WindowPrototype, DocumentPrototype, ElementPrototype, addEventListener, removeEventListener, dispatchEvent, registry) {
@@ -914,7 +914,7 @@ nd && nd.PLUGIN(function(N,CORE){
 		},
 		"root":function(node){
 			if(!N.isElement(node)) return;
-			var findWhile = function(node){ node.parentElement ? findWhile(node.parentElement) : node ; };
+			var findWhile = function(node){ return node.parentElement ? findWhile(node.parentElement) : node ; };
 			return findWhile(node);
 		},
 		"parents":function(node){
@@ -1586,6 +1586,12 @@ nd && nd.PLUGIN(function(N,CORE){
 		"attr":function(sel,v1,v2){ var node = N.findLite(sel)[0]; if(node) return N.NODEKIT.attr.apply(undefined,[node].concat(Array.prototype.slice.call(arguments,1))); },
 		//css스타일로 el의 상태를 확인합니다.
 		"is":function(sel,value){ var node = N.findLite(sel)[0]; if(node)return N.NODEKIT.is(node,value); },
+		//도큐먼트에 남아있는지 확인
+		"isLive":function(sel,value){ 
+			var targ = N.findLite(sel)[0];
+			if(!targ) return false;
+			return N.NODEKIT.root(targ).tagName == "HTML";
+		},
 		//선택한 element중 대상만 남깁니다.
 		"filter":function(sel,filter){
 			var targets = N.findLite(sel);
@@ -2098,6 +2104,20 @@ nd && nd.PLUGIN(function(N,CORE){
 			}
 			return nodes;
 		},
+		"live":function(nodes,life,die){
+			return N.map(N.findLite(nodes),function(node){
+				if(node && life && die){
+					var liveInstance = N.dummy(function(){
+						this.life();
+					},{
+						life:function(){ life.call(node,this) },
+						die:function(){ die.call(node,this) },
+						resolve:function(){ if( !N.node.isLive(node) ){ this.die(); return false; } return true; }
+					});
+					return liveInstance;
+				}
+			},N.clear);
+		},
 		//bind touch event
 		"punch":function(node, eventName){
 			var onTargets = N.node.onTarget(node);
@@ -2206,7 +2226,7 @@ nd && nd.PLUGIN(function(N,CORE){
 		"addAttr":function(node,attrName,attrValue){
 			var findNodes = N.findLite(node);
 			if(typeof attrValue !== "attrName" && typeof attrValue !== "string") return findNodes;
-			for(var i=0,l=findNodes.length;i<l;i++) findNodes[i].setAttribute(attrName,ELKIT.CommonString.set(findNodes[i].getAttribute(attrName)).addModel(attrValue));
+			for(var i=0,l=findNodes.length;i<l;i++) findNodes[i].setAttribute(attrName,ELKIT.CommonString.set(findNodes[i].getAttribute(attrName)).addToken(attrValue));
 			return findNodes;
 		},
 		"hasAttr":function(node,attrName,attrValue){
@@ -2216,7 +2236,7 @@ nd && nd.PLUGIN(function(N,CORE){
 				return false;
 			}
 			if(typeof attrValue !== "string") return false;
-			for(var i=0,l=findNodes.length;i<l;i++) if( !ELKIT.CommonString.set(findNodes[i].getAttribute(attrName)).hasModel(attrValue) ) {
+			for(var i=0,l=findNodes.length;i<l;i++) if( !ELKIT.CommonString.set(findNodes[i].getAttribute(attrName)).hasToken(attrValue) ) {
 				return false;
 			}
 			return true;
@@ -2227,7 +2247,7 @@ nd && nd.PLUGIN(function(N,CORE){
 			for(var i=0,l=findNodes.length;i<l;i++) {
 				var didRemoveClassText = ELKIT.CommonString.set(
 					findNodes[i].getAttribute(attrName)
-				).setRemoveModel(attrValue).trim();
+				).setRemoveToken(attrValue).trim();
 				if( !didRemoveClassText.length ) {
 					findNodes[i].removeAttribute(attrName);
 				} else {
@@ -2519,9 +2539,8 @@ nd && nd.PLUGIN(function(N,CORE){
 		this.setSource(N.find(select,parent,i));
 	});
 	
-	N.METHOD("node",nd.NodeHandler.new);
+	window.ndn = N.METHOD("node",nd.NodeHandler.new);
 	for(var key in ELKIT) N.node[key]=ELKIT[key];
-	
 	
 	
 	N.MODULE("Binder",{
@@ -3466,7 +3485,6 @@ nd && nd.PLUGIN(function(N,CORE){
 					switch(realStatus){
 						case "start":
 							if(action.start && action.start(event,attr,realStatus) == false) action.cancle(event,attr,realStatus);
-							if(action.move  && action.move(event,attr,"move") == false) action.cancle(event,attr,"move");
 							break;
 						case "move":
 							if(action.move && action.move(event,attr,"move") == false) action.cancle(event,attr,"move");

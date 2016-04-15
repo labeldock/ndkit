@@ -11,7 +11,7 @@
 	
 		// Nody version
 		// This is pre release version
-		N.VERSION = "0.0.0 alpah pre", N.BUILD = "17";
+		N.VERSION = "0.0.0 alpah pre", N.BUILD = "19";
 		
 		// Core verison
 		N.CORE_VERSION = "3.0", N.CORE_BUILD = "100";
@@ -345,17 +345,16 @@
 			return func;
 		};
 		
-		var DummyInstance = function(){};
-		
 		N.METHOD("dummy",function(func,proto){
-			if(arguments.length == 1){
-				if(typeof func !== "function"){
-					proto = func;
-					func  = DummyInstance;
-				}
+			var ins,DummyInstance=function(param){ if(typeof param === "object") for(var k in param) this[k] = param[k]; };
+			if(typeof func == "object"){
+				if(typeof proto === "object") DummyInstance.prototype = proto;
+				ins = new DummyInstance(func);
 			}
-			var ins = (new func());
-			if(typeof proto === "object") for(var k in proto){ ins[k] = proto[k]; }
+			if(typeof func == "function"){
+				if(typeof proto === "object") func.prototype = proto;
+				ins = (new func());
+			}
 			return ins;
 		});
 		
@@ -433,6 +432,11 @@
 		CORE.RECALL = function(f){
 			if(typeof f === "function") return f.apply(this,Array.prototype.slice.call(arguments,1));
 			return f;
+		};
+		
+		CORE.CALLFOR = function(f,v){
+			if(typeof f === "function") return f.apply(this,Array.prototype.slice.call(arguments,1));
+			return v;
 		};
 		
 		CORE.CLONE = function(target,d){
@@ -820,7 +824,6 @@
 		};
 		
 		N.METHOD("this",CORE.PIPE(function(v,f){ return typeof f === "function" ? f(v) : f; },2));
-		
 
 		//trycatch high perfomance
 		CORE.TRY_CATCH = function(t,c,s){try{return t.call(s);}catch(e){if(typeof c === 'function') return c.call(s,e);}};
@@ -1311,6 +1314,10 @@
 			"need":CORE.PIPE(function(d,v){
 				return N.needOf.BOOST(CORE.CLONE(d),v);
 			},2),
+			//nth기반
+			"nth":CORE.PIPE(function(t,i){
+				return t[(~~i)+1];
+			},2),
 			//배열의 하나추출
 			"first":CORE.PIPE(function(t,offset){
 				if(typeof offset === "function" && CORE.TYPEOF.LIKEARRAY(t)) for(var i=0,l=t.length;i<l;i++){
@@ -1372,18 +1379,6 @@
 				if(last==true) for(var i=start,l=end;i<=l;i=i+step) r.push(i); else for(var i=start,l=end;i<l;i=i+step) r.push(i);;
 				return r;
 			},1),
-			"get":CORE.PIPE(function(d,index){
-				if(typeof d === "object" || typeof d === "string") return d[index];
-				return d;
-			},1),
-			"setOf":CORE.PIPE(function(d,v,k){
-				if(typeof k === "undefined") k = (typeof d == "string" || CORE.TYPEOF.LIKEARRAY(v)) ? 0 : "value";
-				if(typeof d === "object" || typeof d === "string") d[k] = CORE.RECALL(v);
-				return d;
-			},2),
-			"set":CORE.PIPE(function(d,v,k){
-				return N.setOf.BOOST(CORE.CLONE(d),v,k);
-			},2),
 			"from":CORE.PIPE(function(v,f){
 				if(typeof v === "object" && typeof f === "string"){
 					if( f.indexOf(".") > 0 ){
@@ -1397,6 +1392,18 @@
 					return v[f];
 				}
 			},2),
+			"get":CORE.PIPE(function(d,index){
+				if(typeof d === "object" || typeof d === "string") return d[index];
+				return d;
+			},1),
+			"setOf":CORE.PIPE(function(d,v,k){
+				if(typeof k === "undefined") k = (typeof d == "string" || CORE.TYPEOF.LIKEARRAY(v)) ? 0 : "value";
+				if(typeof d === "object" || typeof d === "string") d[k] = CORE.RECALL(v);
+				return d;
+			},2),
+			"set":CORE.PIPE(function(d,v,k){
+				return N.setOf.BOOST(CORE.CLONE(d),v,k);
+			},2),
 			"inject":function(v,f,d){ 
 				d=(typeof d=="object"?d:{});v=CORE.AS_ARRAY(v); for(var i=0,l=v.length;i<l;i++)f(d,v[i],i);return d;
 			},
@@ -1407,7 +1414,7 @@
 			},2),
 			// false를 호출하면 배열에서 제거합니다.
 			"sort":CORE.PIPE(function(data,filter){
-				if(data.length == 0) return data.toArray();
+				if(data.length == 0) return CORE.NEW_ARRAY(data);
 				if(typeof filter !== "function") return Array.prototype.sort.call(new N.Array(data));
 				
 				var result = [data[0]];
@@ -1484,14 +1491,14 @@
 			"keys":CORE.PIPE(function(d){
 				return Object.keys(d);
 			},1),
-			//nd.clearance([{a:2,b:4},{a:3,b:3,j:3}]);  => {a: [2, 3], b: [4, 3], j: [undefined, 3]}
-			"clearance":CORE.PIPE(function(c){
+			//nd.trackBy([{a:2,b:4},{a:3,b:3,j:3}]);  => {a: [2, 3], b: [4, 3], j: [undefined, 3]}
+			"trackBy":CORE.PIPE(function(c){
 				var ks=[],r={};
 				for(var k in c){
 					if(typeof c[k] === "object"){
 						for(var i=0,d=Object.keys(c[k]),l=d.length;i<l;i++) ks.push(d[i]);
 					} else {
-						console.warn("nd::clearance not support primitive value",c,c[k]);
+						console.warn("nd::trackBy not support primitive value",c,c[k]);
 					}
 				}
 				for(var i=0,ks=N.unique.BOOST(ks),l=ks.length;i<l;i++){
@@ -1501,9 +1508,7 @@
 				}
 				return r;
 			},1),
-			//nd.track(["aass","bddw","casef"],function(s){ return s[0]; });  =>  {a: ["aass"], b: ["bddw"], c: ["casef"]}
-			//nd.track([{key:"a"},{key:"b"},{key:"c"}],"key");  =>  {a: [{key: "a"}], b: [{key: "b"}], c: [{key: "c"}]}
-			"track":CORE.PIPE(function(d,f){
+			"groupBy":CORE.PIPE(function(d,f){
 				var r={};
 				if(typeof f === "function"){
 					for(var i=0,l=d.length;i<l;i++){
@@ -1526,7 +1531,7 @@
 				return r;
 			},2),
 			//object to array map
-			"trackMap":CORE.PIPE(function(d,f){
+			"groupMap":CORE.PIPE(function(d,f){
 				var r = [];
 				if(typeof f === "function"){
 					for(var k in d)r.push(f(d[k],k));
@@ -1564,6 +1569,11 @@
 				var rv={};
 				for(var i=0,l=ks.length;i<l;i++) rv[ks[i]] = d[ks[i]];
 				return rv;
+			},2),
+			"forDeleteOf":CORE.PIPE(function(a,d){
+				var ks=CORE.AS_ARRAY(a);
+				for(var i=0,l=ks.length;i<l;i++) delete d[ks[i]];
+				return d;
 			},2),
 			"dataEqual":function(data1,data2){
 				var firstType  = typeof data1;
@@ -1654,6 +1664,32 @@
 			"indexAsBounce":CORE.INDEX.BOUNCE,
 		});
 		N.DATAKIT.EACH_TO_METHOD();
+		
+		
+		
+		N.METHOD("when",CORE.PIPE(function(key,cases){
+			if(typeof cases === "object"){
+				if(cases.hasOwnProperty(key)) return CORE.RECALL(cases[key],key);
+			}
+			return CORE.CALLFOR(def,key);
+		},2));	
+		
+		N.METHOD("resolver",function(resolve,cases){
+			if(typeof resolve == "function" && typeof cases === "object"){
+				var last,resolver = N.dummy(function(){},cases);
+				return function(){
+					var args = Array.prototype.slice.call(arguments);
+					var key  = resolve.apply(resolver,args);
+					if(typeof key === "string" || typeof key === "number"){
+						if(last !== key) {
+							last = key;
+							return (typeof resolver[key] === "function") ? resolver[key].apply(resolver,args) : resolver[key];
+						}
+					}
+					if(key===null)last=key; 
+				}
+			}
+		});
 		
 		// 오브젝트 베이스 KIT
 		N.SINGLETON("PROPKIT",{
