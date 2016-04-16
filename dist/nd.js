@@ -11,7 +11,7 @@
 	
 		// Nody version
 		// This is pre release version
-		N.VERSION = "0.0.0 alpah pre", N.BUILD = "19";
+		N.VERSION = "alpha 0.0.1", N.BUILD = "20";
 		
 		// Core verison
 		N.CORE_VERSION = "3.0", N.CORE_BUILD = "100";
@@ -293,9 +293,7 @@
 		N.METHOD = function(n,m,bind){ 
 			N[n]=m;
 			NMethods.push(n);
-			
 			if(typeof bind === 'object'){
-				
 				var bindClass = function(){
 					var _=this; 
 					this.__NODY_METHOD_NEW__ = true; 
@@ -304,7 +302,6 @@
 				
 				for(var key in bind){ METHOD_BIND_FUNCTION(m,key,bind,bindClass); };
 			}
-			
 			return m;
 		};
 		
@@ -334,8 +331,7 @@
 			NSingletons[n]=N[n];
 		};
 		
-		var CORE = {};
-		
+		var CORE={};
 		N.CORE = CORE;
 		
 		CORE.NDCLASS = function(func,proto){
@@ -424,11 +420,6 @@
 				return c || {};
 		};
 		
-		CORE.FILTERCALL = function(f,v){
-			if(typeof f === "function") return f.apply(this,Array.prototype.slice.call(arguments,1));
-			return v;
-		};
-		
 		CORE.RECALL = function(f){
 			if(typeof f === "function") return f.apply(this,Array.prototype.slice.call(arguments,1));
 			return f;
@@ -512,6 +503,11 @@
 			FLOAT:function(v){
 				var n=CORE.NUMBER.NUMBERS(v);
 				return n[0]+parseFloat("0."+n[1]);
+			},
+			NUMBER:function(v,d){
+				switch(typeof v){ case "number":return v;case "string":var r=v.replace(/[^.\d\-]/g,"")*1;return isNaN(r)?0:r;break; }
+				switch(typeof d){ case "number":return d;case "string":var r=d*1;return isNaN(r)?0:r;break; }
+				return 0;
 			}
 		};
 		
@@ -536,13 +532,28 @@
 				for(var i=0,l=d.length;i<l;i++) d=f(d,d[i],i);
 				return d;
 			},
-			FOREACH:function(d,f){
+			PROPEACH:function(d,f){
 				for(var k in d) if( f(d[k],k) == false ) break;
 				return d;
 			},
-			FORMAP:function(d,f){
+			PROPMAP:function(d,f){
 				for(var k in d) d[k] = f(d[k],k);
 				return d;
+			},
+			FILTER:function(od,fm){
+				var od=CORE.AS_ARRAY(od),samp=CORE.CLONE(od),fm=(typeof fm === "function")?fm:function(a){return a===fm?false:true;},od=CORE.DATAPROC.CLEAR(od);
+				CORE.ENUM.EACH(samp,function(v){ if(fm(v) == true) od.push(v); })
+				return od;
+			},
+			ANY:function(od,fm){
+				var tr=false,fm=(typeof fm === 'function')?fm:function(v){return v === fm;},fv=undefined;
+				CORE.ENUM.EACH(od,function(v,i){ if(i==0)fv=v; if(fm(v,i,fv) === true) { tr = true; return false; } });
+				return tr;
+			},
+			ALL:function(od,fm){
+				var tr=true,fm=(typeof fm === 'function')?fm:function(v){return v === fm;},fv=undefined;
+				CORE.ENUM.EACH(od,function(v,i){ if(i==0)fv=v; if(fm(v,i,fv) === false) return tr = false; });
+				return tr;
 			}
 		};
 		
@@ -557,9 +568,8 @@
 			PAGE:function(i,p){ return Math.floor(i/p); },
 			REVERSE:function(i,p){ return (p-1) - i },
 			TURN:function(i,p){ if(i < 0) { var abs = Math.abs(i); i = p-(abs>p?abs%p:abs); }; return (p > i)?i:i%p; },
-			BOUNCE:function(i,p){ i = N.toNumber(i); p = N.toNumber(p); return (i == 0 || (Math.floor(i/p)%2 == 0))?i%p:p-(i%maxIndex); }
+			BOUNCE:function(i,p){ i = CORE.NUMBER.NUMBER(i); p = CORE.NUMBER.NUMBER(p); return (i == 0 || (Math.floor(i/p)%2 == 0))?i%p:p-(i%maxIndex); }
 		};
-		
 		
 		//vector based range
 		CORE.NDZONE = CORE.NDCLASS(function(source,step){
@@ -745,9 +755,9 @@
 			this.setSize(pos);
 		},{
 			setPosition:function(v){
-				var fv = CORE.FILTERCALL(this.$fixedDomainPosition,CORE.NUMBER.FLOAT(v));
+				var fv = CORE.CALLFOR(this.$fixedDomainPosition,CORE.NUMBER.FLOAT(v));
 				var $d = this.$domain;
-				this.$position = CORE.FILTERCALL(function(v){
+				this.$position = CORE.CALLFOR(function(v){
 					if($d) {
 						var min = $d.$domain.minimum();
 						var max = $d.$domain.maximum();
@@ -758,9 +768,9 @@
 				},fv);
 			},
 			setSize:function(v){
-				var fv = CORE.FILTERCALL(this.$fixedDomainSize,CORE.NUMBER.FLOAT(v));
+				var fv = CORE.CALLFOR(this.$fixedDomainSize,CORE.NUMBER.FLOAT(v));
 				var $d = this.$domain;
-				this.$size = CORE.FILTERCALL(function(v){
+				this.$size = CORE.CALLFOR(function(v){
 					if(v < 0) return 0;
 					if($d) {
 						var size = $d.$domain.size();
@@ -1076,64 +1086,23 @@
 		
 		N.TYPE.EACH_TO_METHOD();
 		
-		var DATA_CLEAR_PROC = function(d){
-			if(typeof d == "object"){
-				if(CORE.TYPEOF.LIKEARRAY(d)){
-					Array.prototype.splice.call(d,0,d.length);
-				} else {
-					for(var k in d){ delete d[k]; }
+		
+		CORE.DATAPROC = {
+			CLEAR:function(d){
+				if(typeof d == "object"){
+					if(CORE.TYPEOF.LIKEARRAY(d)){
+						Array.prototype.splice.call(d,0,d.length);
+					} else {
+						for(var k in d){ delete d[k]; }
+					}
+					return d;
 				}
+				return [];
+			},
+			PUSH:function(d,v,k){
+				if(typeof d == "object") CORE.TYPEOF.LIKEARRAY(d) ? d.push(v) : d[k || "value"] = v;
 				return d;
 			}
-			return [];
-		};
-		
-		var DATA_PUSHOF_PROC = function(d,v,k){
-			if(typeof d == "object"){
-				if(CORE.TYPEOF.LIKEARRAY(d)){
-					d.push(v);
-				} else {
-					d[k || "value"] = v;
-				}
-			}
-			return d;
-		};
-		
-		var DATA_FILTER_PROC = function(inData,filterMethod){
-			var data = CORE.AS_ARRAY(inData);
-			filterMethod = filterMethod || function(a){ return typeof a === "undefined" ? false : true; };
-			if(typeof filterMethod === "function"){
-				var result=[];
-				N.each(data,function(v,i){ if(filterMethod(v,i)==true) result.push(v); });
-				return result;
-			}
-			return [];
-		};
-		
-		var DATA_FILTEROF_PROC = function(inData,filterMethod){
-			var inData=CORE.AS_ARRAY(inData),samp=CORE.CLONE(inData),fm=(typeof filterMethod === "function")?filterMethod:function(a){return a===filterMethod?false:true;},inData=DATA_CLEAR_PROC(inData);
-			CORE.ENUM.EACH(samp,function(v){ if(fm(v) == true) inData.push(v); })
-			return inData;
-		};
-		
-		var DATA_ANY_PROC = function(inData,filterMethod){
-			var tr=false,fm=(typeof filterMethod === 'function') ? filterMethod : function(v){ return v === filterMethod; },fv=undefined;
-			DATA_FILTER_PROC(inData,function(v,i){
-				if(i==0)fv=v;
-				var r = fm(v,i,fv);
-				if(r === true) { tr = true; return false; }
-			});
-			return tr;
-		};
-		
-		var DATA_ALL_PROC = function(inData,filterMethod){
-			var tr = true,fm=(typeof filterMethod === 'function') ? filterMethod : function(v){ return v === filterMethod; },fv=undefined;
-			DATA_FILTER_PROC(inData,function(v,i){
-				if(i==0)fv=v;
-				var r = fm(v,i,fv);
-				if(r === false) return tr = false;
-			});
-			return tr;
 		};
 		
 		// 배열 오브젝트 베이스 KIT
@@ -1151,8 +1120,8 @@
 			"toObject":CORE.PIPE(function(ob,es,kv){
 				return CORE.AS_OBJECT(ob,es,kv);
 			},1),
-			"pushOf":CORE.PIPE(DATA_PUSHOF_PROC,2),
-			"push":CORE.PIPE(function(d,v,k){ return DATA_PUSHOF_PROC(CORE.CLONE(d),v,k); },2),
+			"pushOf":CORE.PIPE(CORE.DATAPROC.PUSH,2),
+			"push":CORE.PIPE(function(d,v,k){ return CORE.DATAPROC.PUSH(CORE.CLONE(d),v,k); },2),
 			"has" :function(d,v){ 
 				if(typeof d === "object"){
 					if(CORE.TYPEOF.LIKEARRAY(d)){
@@ -1168,9 +1137,9 @@
 			"add":CORE.PIPE(function(data,v,k){
 				return N.has(data,v) ? data : N.push.BOOST(data,v,k);
 			},2),
-			"clear":CORE.PIPE(DATA_CLEAR_PROC,1),
-			"filterOf":CORE.PIPE(DATA_FILTEROF_PROC,2),
-			"filter":CORE.PIPE(function(d,f){ return DATA_FILTEROF_PROC(CORE.CLONE(d),f); },2),
+			"clear":CORE.PIPE(CORE.DATAPROC.CLEAR,1),
+			"filterOf":CORE.PIPE(CORE.ENUM.FILTER,2),
+			"filter":CORE.PIPE(function(d,f){ return CORE.ENUM.FILTER(CORE.CLONE(d),f); },2),
 			"count":function(d){
 				if(typeof d === "object") return d instanceof Array ? d.length : Object.keys(d).length;
 				if(typeof d === "string") return d.length;
@@ -1220,8 +1189,8 @@
 					return data.indexOf(value);
 				}
 			},
-			"all":DATA_ALL_PROC,
-			"any":DATA_ANY_PROC,
+			"all":CORE.ENUM.ALL,
+			"any":CORE.ENUM.ANY,
 			"where":CORE.PIPE(function(c,d){
 				var r = [];
 				if(typeof d === "object") for(var i=0,l=c.length;i<l;i++){
@@ -1355,7 +1324,7 @@
 			},2),
 			//1:길이와 같이 2: 함수호출
 			"times":CORE.PIPE(function(l,f,s){ 
-				l=N.toNumber(l); var r = []; 
+				l=CORE.NUMBER.NUMBER(l); var r = []; 
 				if(typeof f === 'string') var fs = f, f = function(i){ return N.exp.seed(i)(fs); };
 				for(var i=(typeof s === 'number')?s:0;i<l;i++) r.push(f(i)); 
 				return r; 
@@ -1446,30 +1415,6 @@
 				for(var i=index<0?0:index,l=d.length;i<l;i++) r.push(d[i]);
 				return r;
 			},2),
-			"exitFillOf":CORE.PIPE(function(data,index,req){
-				data = CORE.AS_ARRAY(data);
-				if(typeof req == "function"){
-					for(var i=data.length,l=~~index;i<l;i++) data.push(req(i));
-				} else {
-					for(var i=data.length,l=~~index;i<l;i++) data.push(CORE.CLONE(req));
-				}
-				return data;
-			},3),
-			"exitFill":CORE.PIPE(function(data,index,req){
-				return N.exitFillOf.BOOST(CORE.CLONE(data),index,req);
-			},3),
-			"dataShift":function(data,len,rep){
-				return N.arrayShift(Array.prototype.slice.call(CORE.AS_ARRAY(data)),len,rep);
-			},
-			"arrayUnshift":function(data,index,rep){
-				//todo:behind와 통합
-				index = typeof index !== "number" ? data.length - 1 : index;
-				Array.prototype.splice.apply(data,[index,data.length-index].concat(Array.prototype.slice.call(arguments,2)));
-				return data;
-			},
-			"dataUnshift":function(data,index,rep){
-				return N.arrayReplace(Array.prototype.slice.call(CORE.AS_ARRAY(data)),index,rep);
-			},
 			//중복되는 값 제거
 			"unique":CORE.PIPE(function(){
 				var value  = [],result = [];
@@ -1487,9 +1432,6 @@
 					}
 				}
 				return result;
-			},1),
-			"keys":CORE.PIPE(function(d){
-				return Object.keys(d);
 			},1),
 			//nd.trackBy([{a:2,b:4},{a:3,b:3,j:3}]);  => {a: [2, 3], b: [4, 3], j: [undefined, 3]}
 			"trackBy":CORE.PIPE(function(c){
@@ -1530,16 +1472,6 @@
 				}
 				return r;
 			},2),
-			//object to array map
-			"groupMap":CORE.PIPE(function(d,f){
-				var r = [];
-				if(typeof f === "function"){
-					for(var k in d)r.push(f(d[k],k));
-				} else {
-					for(var k in d)r.push(d[k]);
-				}
-				return r;
-			},2),
 			//custom ordinal enum
 			"forEach":CORE.PIPE(function(a,d,f){
 				var ks=CORE.AS_ARRAY(a);
@@ -1575,7 +1507,7 @@
 				for(var i=0,l=ks.length;i<l;i++) delete d[ks[i]];
 				return d;
 			},2),
-			"dataEqual":function(data1,data2){
+			"equal":function(data1,data2){
 				var firstType  = typeof data1;
 				if(firstType === typeof data2) {
 					if(firstType === "object") {
@@ -1615,15 +1547,15 @@
 				}
 				return false;
 			},
-			"dataEqualUnique":function(){
+			"equalUnique":function(){
 				var value=[],result=[];
 				for(var ai=0,li=arguments.length;ai<li;ai++){
 					var mvArray = CORE.NEW_ARRAY(arguments[ai]);
 					for(var i=0,l=mvArray.length;i<l;i++){
 						var unique = true;
 						for(var i2=0,l2=result.length;i2<l2;i2++){
-							//console.log("mvArray[i],result[i2]",mvArray[i],result[i2],N.dataEqual(mvArray[i],result[i2]));
-							if(N.dataEqual(mvArray[i],result[i2])){
+							//console.log("mvArray[i],result[i2]",mvArray[i],result[i2],N.equal(mvArray[i],result[i2]));
+							if(N.equal(mvArray[i],result[i2])){
 								unique = false;
 								break;
 							}
@@ -1633,12 +1565,15 @@
 				}
 				return result;
 			},
+			"keys":CORE.PIPE(function(d){
+				return Object.keys(d);
+			},1),
 			"index":function(data,compare){ 
 				var v = CORE.AS_ARRAY(data);
 				if(typeof compare === "function"){
-					for(var i in v) if(compare(v[i],i) == true) return N.toNumber(i);
+					for(var i in v) if(compare(v[i],i) == true) return CORE.NUMBER.NUMBER(i);
 				} else {
-					for(var i in v) if(compare == v[i]) return N.toNumber(i);
+					for(var i in v) if(compare == v[i]) return CORE.NUMBER.NUMBER(i);
 				}
 			},
 			// 배열안의 배열을 풀어냅니다.
@@ -1651,21 +1586,13 @@
 			"CALL"    :function(f,owner){ return (typeof f === "function") ? ((arguments.length > 2) ? f.apply(owner,Array.prototype.slice.call(arguments,2)) : f.call(owner)) : undefined; },
 			"CALLBACK":function(f,owner){ return (typeof f === "function") ? ((arguments.length > 2) ? f.apply(owner,Array.prototype.slice.call(arguments,2)) : f.call(owner)) : f; },
 			//배열안에 배열을 길이만큼 추가
-			"arrays":function(l) { l=N.toNumber(l);var aa=[];for(var i=0;i<l;i++){ aa.push([]); }return aa; },
-			//숫자로 변환합니다. 디폴트 값이나 0으로 반환합니다.
-			"toNumber":function(v,d){
-				switch(typeof v){ case "number":return v;case "string":var r=v.replace(/[^.\d\-]/g,"")*1;return isNaN(r)?0:r;break; }
-				switch(typeof d){ case "number":return d;case "string":var r=d*1;return isNaN(r)?0:r;break; }
-				return 0;
-			},
+			"arrays":function(l) { l=CORE.NUMBER.NUMBER(l);var aa=[];for(var i=0;i<l;i++){ aa.push([]); }return aa; },
 			//i 값이 제귀합니다.
 			"indexAsReverse":CORE.INDEX.REVERSE,
 			"indexAsTurn":CORE.INDEX.TURN,
 			"indexAsBounce":CORE.INDEX.BOUNCE,
 		});
 		N.DATAKIT.EACH_TO_METHOD();
-		
-		
 		
 		N.METHOD("when",CORE.PIPE(function(key,cases){
 			if(typeof cases === "object"){
@@ -1686,7 +1613,7 @@
 							return (typeof resolver[key] === "function") ? resolver[key].apply(resolver,args) : resolver[key];
 						}
 					}
-					if(key===null)last=key; 
+					if(key===null) last=key; 
 				}
 			}
 		});
@@ -1724,27 +1651,6 @@
 				}
 				return source;
 			}),
-			"propSet":CORE.PIPE(function(source,key){
-				if(N.isProp(source) && (typeof key === "string" || typeof key === "number")) {
-					for(var i=2,l=arguments.length;i<l;i++){
-						if(arguments[i] !== undefined || arguments[i] !== NaN){
-							source[key] = arguments[i];
-							break;
-						}
-					}
-				}
-				return source;
-			}),
-			"propShift":CORE.PIPE(function(source,key){
-				var result;
-				if(N.isProp(source) && (typeof key === "string" || typeof key === "number") && (key in source)) {
-					result = source[key];
-					delete source[key];
-				}
-				return result;
-			}),
-			//오브젝트의 key value값을 Array 맵으로 구한다.
-			"propData" :CORE.PIPE(function(v,f){ var result = []; if(typeof f !== "function") f = function(v){ return v; }; if(typeof v === "object"){ for(var k in v) result.push(f(v[k],k)); return result; } return result;},2),
 			"propKey"  :CORE.PIPE(function(obj,rule,expandKeys){
 				var r = [];
 				if(typeof rule === "string"){
@@ -1788,7 +1694,7 @@
 				r.format = function(s){
 					return s.replace('YYYY',r.year).replace(/(MM|M)/,r.month).replace(/(DD|D)/,r.date)
 					.replace(/(hh|h)/,r.hour).replace(/(mm|m)/,r.minute).replace(/(ss|s)/,r.second)
-					.replace(/(A)/,(N.toNumber(r.hour) > 12) ? 'PM' : 'AM');
+					.replace(/(A)/,(CORE.NUMBER.NUMBER(r.hour) > 12) ? 'PM' : 'AM');
 				}
 				if(typeof format === 'string') 
 					return r.format(format);
@@ -2073,9 +1979,9 @@
 			},
 			// nd.ratio(500,10,50,100) => [31, 156, 313]
 			"ratiof":function(ratioTotal){
-				var args = N.argumentsFlatten(arguments),total = 0,ratioTotal=N.toNumber(args.shift()) || 100;
+				var args = N.argumentsFlatten(arguments),total = 0,ratioTotal=CORE.NUMBER.NUMBER(args.shift()) || 100;
 				return N.map(args,function(v){
-					var num = N.toNumber(v);
+					var num = CORE.NUMBER.NUMBER(v);
 					total += num;
 					return num;
 				},N.arrayMap,function(num){
@@ -2083,7 +1989,7 @@
 				});
 			},
 			"ratio":function(ratioTotal){
-				var fixResult = N.toNumber(ratioTotal);
+				var fixResult = CORE.NUMBER.NUMBER(ratioTotal);
 				var roundResult = N.arrayMap(N.ADVKIT.ratiof.apply(this,Array.prototype.slice.call(arguments)),function(n){
 					var round = Math.round(n);
 					fixResult -= round;
@@ -2102,7 +2008,7 @@
 			"arcPoint":function(radius,deg){
 				return N.arrayMap(N.arcPointf(radius,deg),function(n){ return Math.round(n); });
 			},
-			"toPx":function(v){ if( /(\%|px)$/.test(v) ) return v; return N.toNumber(v)+"px"; },
+			"toPx":function(v){ if( /(\%|px)$/.test(v) ) return v; return CORE.NUMBER.NUMBER(v)+"px"; },
 			//래핑된 텍스트를 제거
 			"isWrap":function(c,w){ if(typeof c === "string"){ c = c.trim(); w = typeof w !== "undefined" ? CORE.AS_ARRAY(w) : ['""',"''","{}","[]"]; for(var i=0,l=w.length;i<l;i++){ var wf = w[i].substr(0,w[i].length-1); var we = w[i].substr(w[i].length-1); if(c.indexOf(wf)==0 && c.substr(c.length-1) == we) return true; } } return false; },
 			"unwrap":function(c,w){ if(typeof c === "string"){ c = c.trim(); w = typeof w !== "undefined" ? CORE.AS_ARRAY(w) : ['""',"''","{}","[]","<>"]; for(var i=0,l=w.length;i<l;i++) if(N.isWrap(c,w[i])) return c.substring(w[i].substr(0,w[i].length-1).length,c.length-1); } return c; },
@@ -2284,7 +2190,7 @@
 				}
 				if(typeof base === "undefined"){ return ; } else {
 					var baseLength = N.toLength(v);
-					var result,len = N.toNumber(l,baseLength);
+					var result,len = CORE.NUMBER.NUMBER(l,baseLength);
 					switch(typeof base){
 						case "string": result=""; for(var i=0;i<len;i++)result+=v[N.indexAsTurn(i,baseLength)]; return result;
 						case "number":
@@ -2347,7 +2253,7 @@
 					var info = (new StringNumberInfo(source)).get();
 					if(!!info.prefix || !!info.prefixZero || !!info.suffix) return source;
 				}
-				return N.toNumber(source);
+				return CORE.NUMBER.NUMBER(source);
 			},
 			"cursor":function(v,getter,gears){
 				return new CORE.NDCURSOR(v,getter,gears);
@@ -2369,8 +2275,8 @@
 					var nprefix = ns1.prefix;
 					var nzeroLen = !!ns1.prefixZero ? ns1.prefixZero.length + ns1.integer.length : 0 ;
 					//
-					var numv1 = N.toNumber(ns1.number);
-					var numv2 = N.toNumber(ns2.number);
+					var numv1 = CORE.NUMBER.NUMBER(ns1.number);
+					var numv2 = CORE.NUMBER.NUMBER(ns2.number);
 					//
 				
 					var chov  = 0;
@@ -2378,8 +2284,8 @@
 					} else { chov = numv1+Math.floor(Math.random()*(numv2-numv1+1)); }
 					//
 					if( nzeroLen > 0){
-						renVal = N.toNumber(chov);
-						renLen = N.toNumber(nzeroLen);
+						renVal = CORE.NUMBER.NUMBER(chov);
+						renLen = CORE.NUMBER.NUMBER(nzeroLen);
 						chov   = renLen ? ((renVal + Math.pow(10,renLen))+"").substr(1) : renVal
 					} 
 					return !!nprefix ? nprefix+chov : chov;
@@ -2479,7 +2385,7 @@
 		
 		},{
 			seed:function($seed){ 
-				this.$seed = N.toNumber($seed);
+				this.$seed = CORE.NUMBER.NUMBER($seed);
 			},
 			names:function(){
 				this.$names = Array.prototype.slice.call(arguments);
@@ -2498,11 +2404,11 @@
 		
 		N.METHOD("expn",function(source){
 			if(arguments.length === 1){
-				return N.toNumber(N.exp.call(undefined,"\\("+source+")"));
+				return CORE.NUMBER.NUMBER(N.exp.call(undefined,"\\("+source+")"));
 			} else {
 				var args = Array.prototype.slice.call(arguments);
 				args[0]  = "\\{"+args[0]+"}";
-				return N.toNumber(N.exp.apply(undefined,args));
+				return CORE.NUMBER.NUMBER(N.exp.apply(undefined,args));
 			}
 		});
 		
@@ -3040,7 +2946,7 @@
 			},
 			//한줄의 탭을 정렬함
 			tabAbsolute:function(tabSize,tabString){
-				tabSize = N.toNumber(tabSize);
+				tabSize = CORE.NUMBER.NUMBER(tabSize);
 				if(arguments.length < 2) tabString = "\t";
 				if(tabSize < 0) tabSize = 0;
 				var result = "";

@@ -38,7 +38,6 @@ nd && nd.PLUGIN(function(N,CORE){
 		};
 	})(Window.prototype, HTMLDocument.prototype, Element.prototype, "addEventListener", "removeEventListener", "dispatchEvent", []);
 	
-	
 	//
 	// webkit : include
 	//
@@ -717,7 +716,7 @@ nd && nd.PLUGIN(function(N,CORE){
 										result[":"][attrInfo[2]] = true;
 										break;
 									case ":nth-child":
-										result[":"][attrInfo[2]] = (attrInfo[4] === undefined) ? null : attrInfo[4].match(/^(even|odd)$/) ? attrInfo[4] : N.toNumber(attrInfo[4]) 
+										result[":"][attrInfo[2]] = (attrInfo[4] === undefined) ? null : attrInfo[4].match(/^(even|odd)$/) ? attrInfo[4] : CORE.NUMBER.NUMBER(attrInfo[4]) 
 										break;
 									case ":contains": case ":has": case ":not":
 										result[":"][attrInfo[2]] = attrInfo[4];
@@ -2346,10 +2345,10 @@ nd && nd.PLUGIN(function(N,CORE){
 						case 3:styleName='height';break;
 						default:return false;break;
 					}
-					var styleValue = (N.toNumber(v)*scale);
+					var styleValue = (CORE.NUMBER.NUMBER(v)*scale);
 					switch(i){
-						case 0:styleValue += N.toNumber(offsetX);break;
-						case 1:styleValue += N.toNumber(offsetY);break;
+						case 0:styleValue += CORE.NUMBER.NUMBER(offsetX);break;
+						case 1:styleValue += CORE.NUMBER.NUMBER(offsetY);break;
 					}
 					N.node.style(findNode,styleName,styleValue+"px");
 				});
