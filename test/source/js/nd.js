@@ -11,7 +11,7 @@
 	
 		// Nody version
 		// This is pre release version
-		N.VERSION = "alpha 0.0.1", N.BUILD = "20";
+		N.VERSION = "alpha 0.0.3", N.BUILD = "21";
 		
 		// Core verison
 		N.CORE_VERSION = "3.0", N.CORE_BUILD = "100";
@@ -1077,6 +1077,9 @@
 				if(testResult === false) return (typeof falseBlock === "function") ? falseBlock(target) : (typeof falseBlock !== "undefined") ? falseBlock : false;
 			
 				return false;
+			},
+			"own":function(target,prop,tb,fb){
+				return target.hasOwnProperty(prop) ? CORE.CALLFOR(tb,target[prop],target) : CORE.CALLFOR(tb,target[prop],target);
 			},
 			"like":function(target,test,tb,fb){
 				if(N.isString(target)) target = target.trim();

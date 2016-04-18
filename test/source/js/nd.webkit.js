@@ -6,7 +6,7 @@
 
 nd && nd.PLUGIN(function(N,CORE){
 	
-	N.VERSION += ", webkit 0.0 alpah pre", N.BUILD += ", webkit(4)";
+	N.VERSION += ", webkit 0.1 alpah pre", N.BUILD += ", webkit(5)";
 	
 	// addEventListener polyfill by https://gist.github.com/jonathantneal/3748027
 	!window.addEventListener && (function (WindowPrototype, DocumentPrototype, ElementPrototype, addEventListener, removeEventListener, dispatchEvent, registry) {
