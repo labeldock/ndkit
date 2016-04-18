@@ -6,7 +6,7 @@
 
 nd && nd.PLUGIN(function(N,CORE){
 	
-	N.VERSION += ", webkit 0.0 alpah pre", N.BUILD += ", webkit(5)";
+	N.VERSION += ", webkit 0.0 alpah pre", N.BUILD += ", webkit(4)";
 	
 	// addEventListener polyfill by https://gist.github.com/jonathantneal/3748027
 	!window.addEventListener && (function (WindowPrototype, DocumentPrototype, ElementPrototype, addEventListener, removeEventListener, dispatchEvent, registry) {
@@ -989,9 +989,8 @@ nd && nd.PLUGIN(function(N,CORE){
             if(!element) return null;
             var xPosition = 0, yPosition = 0;
             while(element){
-				var clientRect = element.getBoundingClientRect();
-                xPosition += (clientRect.left - clientRect.scrollLeft + element.clientLeft);
-                yPosition += (clientRect.top  - clientRect.scrollTop  + element.clientTop );
+                xPosition += (element.offsetLeft - element.scrollLeft + element.clientLeft);
+                yPosition += (element.offsetTop  - element.scrollTop  + element.clientTop );
                 element = element.offsetParent;
             }
             return {x:xPosition,y:yPosition};
@@ -1214,12 +1213,11 @@ nd && nd.PLUGIN(function(N,CORE){
 		"findOffset" :function(node,target,debug){
 			var node = N.findLite(node)[0];
 			if(node) {
-				var clinetRect = node.getBoundingClientRect();
-				var l=t=0,w=clinetRect.width,h=clinetRect.height;
+				var l=t=0,w=node.offsetWidth,h=node.offsetHeight;
 				target = N.findLite(target)[0] || document.body;
 				do {
-					l += clinetRect.left;
-					t += clinetRect.top;
+					l += node.offsetLeft;
+					t += node.offsetTop;
 					if(debug === true)console.log(l,t,node,target);
 					if(!node.offsetParent) break;
 					if(node === target) break;
@@ -2529,10 +2527,10 @@ nd && nd.PLUGIN(function(N,CORE){
 			return N.FLATTENCALL(ELKIT.uniqueID,ELKIT,this,arguments);
 		},
 		width:function(){
-			return this[0] ? this[0].getBoundingClientRect().width : -1;
+			return this[0] ? this[0].offsetWidth : -1;
 		},
 		height:function(){
-			return this[0] ? this[0].getBoundingClientRect().height : -1;
+			return this[0] ? this[0].offsetHeight : -1;
 		},
 		disabled:function(){ N.FLATTENCALL(ELKIT.disabled,ELKIT,this,arguments); return this; },
 		readonly:function(){ N.FLATTENCALL(ELKIT.readOnly,ELKIT,this,arguments); return this; },
