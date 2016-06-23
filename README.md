@@ -1,69 +1,54 @@
 # ndkit
-Enumerate library of javascript 
+web Enumerate library of javascript 
 
 
-# nd.webkit
-
-
-
-# nd.mvmp
-Context based script
-
-
+# nd.xkit
 ## Concept and goal target
-```javascript
+```html
+<div id="xrepeat-body"></div>
 
-<placeholder :Timebody id="main"></placeholder>
-
-<template :Timebody>
-	<header>
-		<h2 nd="title|text"><!-- Default title --></h2>
-		<small nd="description|text"><!-- description --></small>
-	</header>
-	<inventory>
-		<placeholder :Timebar nd="data"></placeholder>
-	</inventory>
-	<aside>
-		<button nd="data|showCountAction">Show count</button>
-	</aside>
-</template>
-<template :Timeitem>
-	<!-- One of the worries create a repeat -->
-	<li nd-repeat="$this">
-		<p nd="value|text"></p>
-		<button nd="$index|removeItemAction"></button>
-	</li>
+<template tag="custom-tag">
+  <div>{{change|padLeft}}</div>
+  <a class="change-action">change</a>
 </template>
 
 
 <script>
-	var data = {
-		title:"Time!",
-		description:"this time!"
-		data:[
-			{value:"01"},
-			{value:"02"},
-			{value:"03"}
-		]
-	};
-	
-	nd.Role.new("Timebody",{
-		showCountAction:function(data){
-			alert("count" + data);
-		}
-	},function(role,element){
-		//init param
-	});
-	
-	nd.Role.new("Timeitem",{
-		removeItemAction:function(data){
-			this.remove();
-		}
-	},function(role,element){
-		//init param
-	});
-	
-	var mainMobile = nd.Mobile.new("#main",data);
+nd.xtag("custom-tag",{
+  create:function(){
+    
+  },
+  append:function(){
+    
+  },
+  remove:function(){
+    
+  },
+  event:function(){
+    ".change-action:click":function(e){
+      $(this).attr("class","changed");
+    }
+  }
+});
+
+nd.xrepeat("#xrepeat-body",data,function(datum,node){
+  return nd.xmake('custom-tag',datum,node);
+});
+
+var ctag = nd.xselect('custom-tag')
+ctag.get();
+ctag.set("asf",'asf');
+ctag.patch("asf",'asf');
+
+var rtag = nd.xrepeat("#xrepeat-body");
+rtag.get();
+rtag.set([{},{}]);
+
+nd.xfilter("padLeft",function(){
+  return function(){
+    
+  }
+})
 </script>
 
 ```
