@@ -11,45 +11,22 @@
 	
 		// Nody version
 		// This is pre release version
-		N.VERSION = "0.0 alpah pre", N.BUILD = "12";
+		N.VERSION = "1.0.0.1 alpah", N.BUILD = "13";
 		
 		// Core verison
 		N.CORE_VERSION = "3.0", N.CORE_BUILD = "100";
 		
+		//PLUGIN
 		N.PLUGIN = function(proc){ proc(N,CORE); };
   
-		// Pollyfill IE Console error fix
+		// Pollyfill Console error fix
 		if (typeof W.console !== "object") W.console = {}; 'log info warn error count assert dir clear profile profileEnd'.replace(/\S+/g,function(n){ if(!(n in W.console)) W.console[n] = function(){ if(typeof air === "object") if("trace" in air){ var args = Array.prototype.slice.call(arguments),traces = []; for(var i=0,l=args.length;i<l;i++){ switch(typeof args[i]){ case "string" : case "number": traces.push(args[i]); break; case "boolean": traces.push(args[i]?"true":"false"); break; default: traces.push(N.toString(args[i])); break; } } air.trace( traces.join(", ") ); } } });	
-		
-		// Bechmark : two times call the MARK('name');
-		var MARKO = {}; W.MARK = function(name){ if(typeof name === "string" || typeof name === "number") { name = name+""; if(typeof MARKO[name] === "number") { var time = (+new Date() - MARKO[name]);console.info("MARK::"+name+" => "+time) ; delete MARKO[name]; return time  } else { console.info("MARK START::"+name); MARKO[name] = +new Date(); } } };
 		
 		// Pollyfill : Trim 
 		if(!String.prototype.trim) String.prototype.trim = function() { return this.replace(/(^\s*)|(\s*$)/gi, ""); };
-	 
-		// Pollyfill : JSON
-		if(typeof W.JSON === "undefined"){ W.JSON = { 'parse' : function(s) { var r; try { r = eval('(' + s + ')'); } catch(e) { r = N.asObject(s); } return r; }, 'stringify' : function(o) { return W.N.toString(obj,Number.POSITIVE_INFINITY,true); } };}
-		
+	 	
 		// Pollyfill : bind
 		if (!Function.prototype.bind) { Function.prototype.bind = function (oThis) { if (typeof this !== "function") { throw new TypeError("Function.prototype.bind - what is trying to be bound is not callable"); } var aArgs = Array.prototype.slice.call(arguments, 1), fToBind = this, fNOP = function () {}, fBound = function () { return fToBind.apply(this instanceof fNOP && oThis ? this : oThis, aArgs.concat(Array.prototype.slice.call(arguments))); }; fNOP.prototype = this.prototype; fBound.prototype = new fNOP(); return fBound; }; }
-		
-		// IE8 Success fix
-		if (typeof W.success === "function"){W.success = "success";}
-		
-		var IS_MODULE = function(obj,moduleName){
-			if(arguments.length == 1){
-				if(typeof obj === "object" && ("__NativeHistroy__" in obj)){
-					return true;
-				}
-			} else {
-				if(typeof obj === "object" && obj !== null && (typeof moduleName === "string") && ("__NativeHistroy__" in obj)){
-					for(var i=obj["__NativeHistroy__"].length-1;i>-1;i--){
-						if(obj["__NativeHistroy__"][i] === moduleName) return true;
-					}
-				}
-			}
-			return false;
-		};
 		
 		//NativeCore console trace
 		N.API = function(name) {
@@ -149,51 +126,6 @@
 				//
 				NModules[name].prototype.set = setter;
 				NModules[name].prototype.get = getter;
-				NModules[name].prototype._super = function(a){
-					//scope start
-					var currentScopeDepth,
-						currentScopeModuleName,
-						currentScopePrototype,
-						currentMethodName,
-						currentCallMethod=arguments.callee.caller,
-						superScope = 0;
-					for(scopeMax=this.__NativeHistroy__.length;superScope<scopeMax;superScope++){
-						currentScopeDepth      = (this.__NativeHistroy__.length - 1) - superScope ;
-						currentScopeModuleName = this.__NativeHistroy__[currentScopeDepth];
-						currentScopePrototype  = NModules[currentScopeModuleName].prototype.constructor.prototype;
-						currentMethodName;
-						for(var key in currentScopePrototype){
-							if(key !== "_super" && currentScopePrototype[key] == currentCallMethod){
-								currentMethodName = key;
-								break;
-							}
-						}
-						if(typeof currentMethodName !== "undefined"){ break; }
-					}
-					if(typeof currentMethodName === "undefined"){
-						console.error("NodyNativeCore::_super::해당 함수에 그러한 프로토타입이 존재하지 않습니다.",currentCallMethod);
-						return undefined;
-					}
-					//next scope
-					var i=0,result=undefined;
-					for(var i=0,l=currentScopeDepth;i<l;i++){
-						var nextScopeDepth       = this.__NativeHistroy__.length - superScope - 2;
-						var nextScopeName        = this.constructor.prototype.__NativeHistroy__[nextScopeDepth];
-						var nextScopeConstructor = NModules[nextScopeName];
-						var nextScopePrototype   = nextScopeConstructor.prototype;
-						var nextSuperMethod      = nextScopeConstructor.prototype[currentMethodName];
-						superScope++;
-						if(typeof nextSuperMethod === "function"){
-							if(currentCallMethod !== nextSuperMethod){
-								result = nextSuperMethod.apply(this,Array.prototype.slice.call(arguments));
-								break;
-							}
-						} else {
-							break;
-						}
-					}
-					return result;
-				};
 				return true;
 			} else {
 				console.error("NodyNativeCore :: already exsist module =>",name);
@@ -251,28 +183,9 @@
 				NativeFactoryDeploy(name);
 			}
 		};
-		N.MODULE_PROPERTY = function(name,propName,propValue){
-			NModules[name][propName] = propValue;
-			return NModules[name];
-		};
 		N.ARRAY_MODULE = function(name,proto,setter,getter){
 			if(NativeFactoryObject("array",name)){
 				NativeFactoryExtend(name,proto,setter,getter);
-				NativeFactoryDeploy(name);
-			}
-		};
-		N.EXTEND_MODULE = function(parentName,name,methods,setter,getter){
-			if(typeof methods == "function") getter = setter, setter = methods, methods = {};
-			var parentConstructor = NModules[parentName];
-			if(typeof parentConstructor === "undefined") throw new Error("확장할 behavior ("+parentName+")가 없습니다"+N.toString(NModules));
-		
-			//새 오브젝트 만들기
-			if(NativeFactoryObject(parentConstructor.prototype.__NativeType__,name)){
-				var extendConstructor = NModules[name];
-				NativeFactoryExtend(name,parentConstructor.prototype,true,true);
-				NativeFactoryExtend(name,methods,setter,getter);
-				extendConstructor.prototype["__NativeHistroy__"].push(name);
-				// 비헤이비어 만들기
 				NativeFactoryDeploy(name);
 			}
 		};
@@ -290,53 +203,49 @@
 			};
 		};
 		
-		N.METHOD = function(n,m,bind){ 
-			N[n]=m;
-			NMethods.push(n);
+		var ND_FN_BINDER = (function(){
+			var ND_FN_BINDER = function(){};
+			ND_FN_BINDER.prototype.binding = function(f,key){
+				if(typeof f === "function"){
+					return f.bind(this);
+				} else {
+					this[key] = f;
+				}
+			};
+			return ND_FN_BINDER;
+		}());
+		
+		//N.E = function(m){
+		//	
+		//};
+		
+		N.FN = function(n,m,bind){
+			if(typeof n === "object"){
+				var methodBinder = new ND_FN_BINDER();
+				for(var key in n) if(typeof n[key] === "function") {
+					var bindFn = methodBinder.binding(n[key],key);
+					if(typeof bindFn === "function"){
+						N[key] = bindFn;
+						NMethods.push(n);
+					}
+				} 
+			} else {
+				N[n]=m;
+				NMethods.push(n);
+				if(typeof bind === 'object'){	
+					var bindClass = function(){
+						var _=this; 
+						this.__NODY_METHOD_NEW__ = true; 
+						this.call = function(){ return m.apply(_,Array.prototype.slice.call(arguments));};
+					};				
+					for(var key in bind){ METHOD_BIND_FUNCTION(m,key,bind,bindClass); };
+				}
 			
-			if(typeof bind === 'object'){
-				
-				var bindClass = function(){
-					var _=this; 
-					this.__NODY_METHOD_NEW__ = true; 
-					this.call = function(){ return m.apply(_,Array.prototype.slice.call(arguments));};
-				};
-				
-				for(var key in bind){ METHOD_BIND_FUNCTION(m,key,bind,bindClass); };
+				return m;
 			}
-			
-			return m;
 		};
 		
-		//Kit:Core
-		N.SINGLETON = function(n,m,i){
-			var o=i?i:function(){};
-			
-			o.prototype=m;
-			o.prototype.constructor=o;
-			o.prototype.EACH_TO_METHOD_WITH_PREFIX=function(){
-				for(var k in o.prototype){
-					switch(k){
-						case "EACH_TO_METHOD":case "EACH_TO_METHOD_WITH_PREFIX":case "constructor":break;
-						default: N.METHOD(n+k,o.prototype[k]); break;
-					}
-				}
-			};
-			o.prototype.EACH_TO_METHOD=function(){
-				for(var k in o.prototype){
-					switch(k){
-						case "EACH_TO_METHOD":case "EACH_TO_METHOD_WITH_PREFIX":case "constructor":break;
-						default: N.METHOD(k,o.prototype[k]); break;
-					}
-				}
-			};
-			N[n]=new o();
-			NSingletons[n]=N[n];
-		};
-		
-		var CORE = {};
-		
-		N.CORE = CORE;
+		var CORE = N.CORE = {};
 		
 		CORE.NDCLASS = function(func,proto){
 			if(proto) func.prototype = proto;
@@ -344,6 +253,34 @@
 			return func;
 		};
 		
+		//trycatch high perfomance
+		CORE.TRY_CATCH = function(t,c,s){try{return t.call(s);}catch(e){if(typeof c === 'function') return c.call(s,e);}};
+		
+		// (pipeline base function call)
+		// var a = CORE.PIPE(function(a){ return a; });
+		// var b = function(a,b){ return a+b; };
+		// a(1,b,2); => 3
+		CORE.PIPE = function(func,over,owner){ 
+			var f = function(){ 
+				if(arguments.length >= f.__NativeMethodOver__){ 
+					for(var i=f.__NativeMethodOver__,l=arguments.length;i<l;i++){ 
+						if(typeof arguments[i] === "function"){ 
+							return arguments[i].apply(owner,[func.apply(owner,Array.prototype.slice.call(arguments,0,i))].concat(Array.prototype.slice.call(arguments,i+1,l)) ); 
+						} 
+					} 
+				} 
+				return f.__NativeMethod__.apply(owner,Array.prototype.slice.call(arguments)); 
+			}; 
+			return f.__NativeMethod__=func,
+			f.ACLINK =function(argu){
+				var args = CORE.NEW_ARRAY(argu);
+				if(args[0]) args[0] = CORE.CLONE(args[0]);
+				return f.apply(undefined,args);
+			},
+			f.BOOST=func,
+			f.__NativeMethodOver__=(over || 1),f;
+		};
+
 		CORE.KNOWN = {
 			TIMESCALE:[
 				{key:"year",scale:31536000000},
@@ -534,7 +471,6 @@
 			TURN:function(i,p){ if(i < 0) { var abs = Math.abs(i); i = p-(abs>p?abs%p:abs); }; return (p > i)?i:i%p; },
 			BOUNCE:function(i,p){ i = N.toNumber(i); p = N.toNumber(p); return (i == 0 || (Math.floor(i/p)%2 == 0))?i%p:p-(i%maxIndex); }
 		};
-		
 		
 		//vector based range
 		CORE.NDZONE = CORE.NDCLASS(function(source,step){
@@ -782,45 +718,19 @@
 			}
 		});
 		
-		// (pipeline base function call)
-		// var a = CORE.PIPE(function(a){ return a; });
-		// var b = function(a,b){ return a+b; };
-		// a(1,b,2); => 3
-		CORE.PIPE = function(func,over,owner){ 
-			var f = function(){ 
-				if(arguments.length >= f.__NativeMethodOver__){ 
-					for(var i=f.__NativeMethodOver__,l=arguments.length;i<l;i++){ 
-						if(typeof arguments[i] === "function"){ 
-							return arguments[i].apply(owner,[func.apply(owner,Array.prototype.slice.call(arguments,0,i))].concat(Array.prototype.slice.call(arguments,i+1,l)) ); 
-						} 
-					} 
-				} 
-				return f.__NativeMethod__.apply(owner,Array.prototype.slice.call(arguments)); 
-			}; 
-			return f.__NativeMethod__=func,
-			f.ACLINK =function(argu){
-				var args = CORE.NEW_ARRAY(argu);
-				if(args[0]) args[0] = CORE.CLONE(args[0]);
-				return f.apply(undefined,args);
-			},
-			f.BOOST=func,
-			f.__NativeMethodOver__=(over || 1),f;
-		};
-
-		//trycatch high perfomance
-		CORE.TRY_CATCH = function(t,c,s){try{return t.call(s);}catch(e){if(typeof c === 'function') return c.call(s,e);}};
+		//
+		// ndkit : randkit
+		//
 		
 		var UNIQUE_RANDOM_KEYS = [];
-		
-		N.SINGLETON("RANDKIT",{
-			//random
-			base64Token  : "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/",
+		var BASE64_TOKEN = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+		N.FN({
 			base64Random : function(length,codeAt,codeLength){
 				length     = (isNaN(length)) ? 1 : parseInt(length);
 				codeAt     = (isNaN(codeAt)) ? 0 : parseInt(codeAt);
 				codeLength = (isNaN(codeLength)) ? 64 - codeAt : parseInt(codeLength);
 				var result = "";
-				for(var i=0,l=length;i<l;i++) result = result + this.base64Token.charAt( codeAt + parseInt(Math.random() * codeLength) );
+				for(var i=0,l=length;i<l;i++) result = result + BASE64_TOKEN.charAt( codeAt + parseInt(Math.random() * codeLength) );
 				return result;
 			},
 			base64UniqueRandom:function(length,prefixKey,codeAt,codeLength){
@@ -848,21 +758,14 @@
 			
 				return randomKey;
 			},
-			base62Random:function(length) { return this.base64Random(length,0,62); },
-			base62UniqueRandom:function(length,prefix) { return this.base64UniqueRandom(length || 6,prefix,0,62); },
-			random:function(length) { return parseInt(this.base64Random(length,52,10)); },
-			numberRandom:function(length) { return this.base64Random(length,52,10); },
-			base36Random:function(length) { return this.base64Random(length,26,36); },
-			base36UniqueRandom:function(length,prefix) { return this.base64UniqueRandom(length || 6,prefix,26,36); },
-			base26Random:function(length) { return this.base64Random(length,0,52); },
-			base26UniqueRandom:function(length,prefix) { return this.base64UniqueRandom(length || 6,prefix,0,52); },
+			base10Random:function(length) { return parseInt(this.base64Random(length,52,10)); },
 			//확률적으로 flag가 나옵니다. 0~1 true 가 나올 확률
-			"versus":function(probabilityOfTrue){
+			versus:function(probabilityOfTrue){
 				if(typeof probabilityOfTrue !== 'number') probabilityOfTrue = 0.5;
 				return !!probabilityOfTrue && Math.random() <= probabilityOfTrue;
 			},
 			//무작위로 뽑아낸다 //2: 길이만큼
-			"attract":function(v,length){
+			attract:function(v,length){
 				v = CORE.NEW_ARRAY(v);
 				if(typeof length === "undefined") return v[Math.floor(Math.random() * v.length)];
 				if(length > v.length) length = v.length;
@@ -875,7 +778,7 @@
 				return r;
 			},
 			//데이터를 섞는다
-			"shuffle":CORE.PIPE(function(v){
+			shuffle:CORE.PIPE(function(v){
 				//+ Jonas Raoni Soares Silva
 				//@ http://jsfromhell.com/array/shuffle [rev. #1]
 				v = CORE.NEW_ARRAY(v);
@@ -883,7 +786,7 @@
 			    return v;
 			},1)
 		});
-		N.RANDKIT.EACH_TO_METHOD();
+		
 		
 		//
 		// ndkit : cache
@@ -907,7 +810,7 @@
 		//
 		var nody_typemap = { "string" : "isString", "number" : "isNumber", "likenumber": "likeNumber", "likestring" : "likeString", "array" : "isArray", "object" : "isObject", "email" : "isEmail", "ascii" : "isAscii", "true" : "isTrue", "false" : "isFalse", "nothing" : "isNothing", "ok" : "isOk" };
 	
-		N.SINGLETON("TYPE",{
+		N.FN({
 			// // 데이터 타입 검사
 			"isUndefined": function (t) {return typeof t === "undefined" ? true : false ;},
 			"isDefined"  : function (t) {return typeof t !== "undefined" ? true : false ;},
@@ -1056,7 +959,6 @@
 			}
 		});
 		
-		N.TYPE.EACH_TO_METHOD();
 	
 		var DATA_FILTER_PROC = function(inData,filterMethod){
 			var data = CORE.AS_ARRAY(inData);
@@ -1090,7 +992,7 @@
 		};
 		
 		// 배열 오브젝트 베이스 KIT
-		N.SINGLETON("DATAKIT",{			
+		N.FN({
 			"asArray":CORE.PIPE(function(v){
 				return CORE.TYPEOF.LIKEARRAY(v) ? v : CORE.NEW_ARRAY(v);
 			},1),
@@ -1516,11 +1418,9 @@
 			"indexAsTurn":CORE.INDEX.TURN,
 			"indexAsBounce":CORE.INDEX.BOUNCE,
 		});
-		N.DATAKIT.EACH_TO_METHOD();
 		
 		// 오브젝트 베이스 KIT
-		N.SINGLETON("PROPKIT",{
-			"isModule":IS_MODULE,
+		N.FN({
 			"isProp":function(source){
 				return (typeof source === "object") || (typeof source === "function");
 			},
@@ -1594,9 +1494,8 @@
 			},1),
 			"numbers":CORE.NUMBER.NUMBERS
 		});
-		N.PROPKIT.EACH_TO_METHOD();
 		
-		N.SINGLETON("TIMEKIT",{
+		N.FN({
 			"cron":function(pattern){
 				return new CORE.NDCRON(pattern);
 			},
@@ -1699,10 +1598,9 @@
 				return scale;
 			}
 		});
-		N.TIMEKIT.EACH_TO_METHOD();
 		
 		//프리미티브 베이스 킷
-		N.SINGLETON("PRIMITIVEKIT",{
+		N.FN({
 			"decimalValue":function(text){
 	            var numberValue = N.numbers(text)[0]+"";
 	            if(numberValue.length < 4) return numberValue;
@@ -1833,7 +1731,6 @@
 				return unescape(escape(t).replace(/%u..../g,function(s){ return "  "; })).length;
 			}
 		});
-		N.PRIMITIVEKIT.EACH_TO_METHOD();
 		
 	})(window,[],{},{},N,CORE);
 	
@@ -1849,7 +1746,7 @@
 	
 	(function(N,CORE){
 		
-		N.SINGLETON("TOKENKIT",{
+		N.FN({
 			//Helper of pascalCase,camelCase,snakeCase,kebabCase
 			"CASE_SPLIT":function(s,c){ if(typeof c === "string") return s.split(c) ; if(typeof s !== "string")return console.error("CASE_SPLIT::첫번째 파라메터는 반드시 String이여야 합니다. // s =>",s); s = s.replace(/^\#/,""); /*kebab*/ var k = s.split("-"); if(k.length > 1) return k; /*snake*/ var _ = s.split("_"); if(_.length > 1) return _; /*Cap*/ return s.replace(/[A-Z][a-z]/g,function(s){return "%@"+s;}).replace(/^\%\@/,"").split("%@"); },
 			//to PascalCase
@@ -1877,9 +1774,8 @@
 				console.warn("todo");
 			},1)
 		});
-		N.TOKENKIT.EACH_TO_METHOD();
 		
-		N.SINGLETON("ADVKIT",{
+		N.FN({
 			"scalef":function(scale,value,total){
 				return (typeof value === "number"?value:100) / (typeof total === "number"?total:100) * scale;
 			},
@@ -2249,11 +2145,10 @@
 				}
 			}
 		});
-		N.ADVKIT.EACH_TO_METHOD();
 	
 	
 	
-		N.METHOD("exp",function(source){
+		N.FN("exp",function(source){
 			var $seed  = this.$seed || 0;
 			var $names = this.$names || [];
 			var aPoint=[],params = N.map(Array.prototype.slice.call(arguments,1),function(t){ return N.zoneInfo(t); });
@@ -2303,7 +2198,7 @@
 			}
 		});
 	
-		N.METHOD("expn",function(source){
+		N.FN("expn",function(source){
 			if(arguments.length === 1){
 				return N.toNumber(N.exp.call(undefined,"\\("+source+")"));
 			} else {
